@@ -1,53 +1,192 @@
 openapi: 3.1.0
 info:
-  title: 1router MVP API
+  title: 1Router MVP API
   version: 0.1.0
+  description: Minimal contract for MVP routing and policy/key management workflows.
+servers:
+  - url: http://localhost:3000
 paths:
   /v1/models:
     get:
-      summary: List unified models catalog
+      summary: List available unified models
       operationId: listModels
       responses:
-        '200':
-          description: OpenAI-compatible model list with router extension metadata.
+        "200":
+          description: Models list
           content:
             application/json:
               schema:
-                type: object
-                required: [object, data]
-                properties:
-                  object:
-                    type: string
-                    const: list
-                  data:
-                    type: array
-                    items:
-                      type: object
-                      required: [id, object, created, owned_by, x_router]
-                      properties:
-                        id:
-                          type: string
-                        object:
-                          type: string
-                          const: model
-                        created:
-                          type: integer
-                          minimum: 0
-                        owned_by:
-                          type: string
-                        x_router:
-                          type: object
-                          required: [provider, capabilities]
-                          properties:
-                            provider:
-                              type: string
-                            capabilities:
-                              type: object
-                              required: [tools, vision, json_schema]
-                              properties:
-                                tools:
-                                  type: boolean
-                                vision:
-                                  type: boolean
-                                json_schema:
-                                  type: boolean
+                $ref: "#/components/schemas/ModelsListResponse"
+              example:
+                data:
+                  - id: openai/gpt-4.1-mini
+                    provider: openai
+                    capabilities:
+                      - chat
+                      - tool_calls
+                  - id: anthropic/claude-3-5-sonnet
+                    provider: anthropic
+                    capabilities:
+                      - chat
+                meta:
+                  request_id: req_models_001
+  /api/keys:
+    get:
+      summary: List configured provider keys
+      operationId: listApiKeys
+      responses:
+        "200":
+          description: API keys list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiKeysListResponse"
+              example:
+                data:
+                  - id: key_01
+                    provider: openai
+                    label: prod-openai
+                    last4: sk12
+                    status: active
+                  - id: key_02
+                    provider: anthropic
+                    label: staging-anthropic
+                    last4: abcd
+                    status: inactive
+                meta:
+                  request_id: req_keys_001
+  /api/policies:
+    get:
+      summary: List routing policies
+      operationId: listPolicies
+      responses:
+        "200":
+          description: Policies list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PoliciesListResponse"
+              example:
+                data:
+                  - id: pol_01
+                    name: default-chat
+                    match:
+                      route: /v1/chat/completions
+                    action:
+                      strategy: failover
+                      providers:
+                        - openai
+                        - anthropic
+                  - id: pol_02
+                    name: low-cost-embeddings
+                    match:
+                      route: /v1/embeddings
+                    action:
+                      strategy: priority
+                      providers:
+                        - openai
+                meta:
+                  request_id: req_policies_001
+components:
+  schemas:
+    Meta:
+      type: object
+      additionalProperties: false
+      required: [request_id]
+      properties:
+        request_id:
+          type: string
+    Model:
+      type: object
+      additionalProperties: false
+      required: [id, provider, capabilities]
+      properties:
+        id:
+          type: string
+        provider:
+          type: string
+        capabilities:
+          type: array
+          items:
+            type: string
+    ModelsListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Model"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    ApiKeyRecord:
+      type: object
+      additionalProperties: false
+      required: [id, provider, label, last4, status]
+      properties:
+        id:
+          type: string
+        provider:
+          type: string
+        label:
+          type: string
+        last4:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive]
+    ApiKeysListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApiKeyRecord"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    PolicyMatch:
+      type: object
+      additionalProperties: false
+      required: [route]
+      properties:
+        route:
+          type: string
+    PolicyAction:
+      type: object
+      additionalProperties: false
+      required: [strategy, providers]
+      properties:
+        strategy:
+          type: string
+          enum: [priority, failover]
+        providers:
+          type: array
+          items:
+            type: string
+    PolicyRecord:
+      type: object
+      additionalProperties: false
+      required: [id, name, match, action]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        match:
+          $ref: "#/components/schemas/PolicyMatch"
+        action:
+          $ref: "#/components/schemas/PolicyAction"
+    PoliciesListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/PolicyRecord"
+        meta:
+          $ref: "#/components/schemas/Meta"
