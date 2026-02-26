@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import { z } from "zod";
 import { InMemoryApiKeyStore, buildApiKeysListResponse, buildCreateApiKeyResponse } from "./api-keys.js";
+import { buildChatCompletionsStubResponse } from "./chat-completions.js";
 import { buildEmbeddingsStubResponse } from "./embeddings.js";
 import { buildModelsListResponse } from "./models-catalog.js";
 
@@ -16,6 +17,17 @@ function embeddingsErrorEnvelope(
   message: string,
   details?: unknown
 ) {
+  return {
+    error: {
+      code,
+      message,
+      request_id: requestId,
+      ...(details === undefined ? {} : { details })
+    }
+  };
+}
+
+function requestErrorEnvelope(requestId: string, code: string, message: string, details?: unknown) {
   return {
     error: {
       code,
@@ -66,6 +78,26 @@ export function buildApp(options: BuildAppOptions = {}) {
     }
   });
 
+  app.post("/v1/chat/completions", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    try {
+      return await buildChatCompletionsStubResponse(request.body, request.id);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid chat completions request", error.issues);
+      }
+
+      reply.code(400);
+      return requestErrorEnvelope(
+        request.id,
+        "UNSUPPORTED_MODEL",
+        error instanceof Error ? error.message : "Unsupported chat model"
+      );
+    }
+  });
+
   app.get("/api/keys", async (request, reply) => {
     reply.header("x-request-id", request.id);
     return buildApiKeysListResponse(apiKeyStore, request.id);
@@ -81,12 +113,7 @@ export function buildApp(options: BuildAppOptions = {}) {
       if (error instanceof z.ZodError) {
         reply.code(400);
         return {
-          error: {
-            code: "INVALID_REQUEST",
-            message: "Invalid API key create request",
-            request_id: request.id,
-            details: error.issues
-          }
+          ...requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid API key create request", error.issues)
         };
       }
 
