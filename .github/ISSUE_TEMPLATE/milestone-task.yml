@@ -1,0 +1,83 @@
+name: Milestone Task
+description: Small, testable, rollback-safe milestone task for one agent lane
+title: "[M-XXX] <short task title>"
+labels: ["todo"]
+body:
+  - type: input
+    id: milestone_id
+    attributes:
+      label: Milestone ID
+      description: Unique milestone/task id, e.g. M-001
+      placeholder: M-001
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - router
+        - billing
+        - ui
+        - infra
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P0
+        - P1
+        - P2
+      default: 1
+    validations:
+      required: true
+
+  - type: textarea
+    id: background
+    attributes:
+      label: Background / Goal
+      description: Why this task matters
+      placeholder: Describe the business/engineering reason...
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria (at least 3)
+      description: List clear, testable criteria
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope / Constraints
+      description: Keep it milestone-sized and rollback-safe
+      placeholder: What is in scope / out of scope?
+
+  - type: textarea
+    id: test_plan
+    attributes:
+      label: Test Plan
+      description: Unit/integration tests to add or update
+      placeholder: |
+        - unit: ...
+        - integration: ...
+        - manual: ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks / Fallback
+      placeholder: What could fail and fallback plan?
