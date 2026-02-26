@@ -89,7 +89,15 @@ describe("redaction helpers", () => {
 
   it("exports logger redact paths for request headers", () => {
     expect(loggerRedactPaths).toContain("req.headers.authorization");
-    expect(loggerRedactPaths).toContain("req.headers.x-api-key");
-    expect(loggerRedactPaths).toContain("headers.provider-key");
+    expect(loggerRedactPaths).toContain("req.headers[\"x-api-key\"]");
+    expect(loggerRedactPaths).toContain("headers[\"provider-key\"]");
+  });
+
+  it("fails fast when registerRoutes is async", () => {
+    expect(() =>
+      buildApp({
+        registerRoutes: (async () => {}) as unknown as (app: any) => void
+      })
+    ).toThrow("buildApp registerRoutes callback must be synchronous");
   });
 });

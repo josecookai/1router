@@ -11,7 +11,7 @@ const healthzResponseSchema = z.object({
 
 type BuildAppOptions = {
   logger?: boolean;
-  registerRoutes?: (app: FastifyInstance) => void | Promise<void>;
+  registerRoutes?: (app: FastifyInstance) => void;
 };
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -43,7 +43,10 @@ export function buildApp(options: BuildAppOptions = {}) {
     return buildModelsListResponse();
   });
 
-  void options.registerRoutes?.(app);
+  const registerRoutesResult = options.registerRoutes?.(app);
+  if (registerRoutesResult && typeof (registerRoutesResult as { then?: unknown }).then === "function") {
+    throw new Error("buildApp registerRoutes callback must be synchronous");
+  }
 
   return app;
 }
