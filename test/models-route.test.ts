@@ -1,0 +1,26 @@
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { buildApp } from "../src/app.js";
+import { modelsListResponseSchema } from "../src/models-catalog.js";
+
+describe("GET /v1/models", () => {
+  const app = buildApp();
+
+  beforeAll(async () => {
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it("returns an OpenAI-compatible model list payload", async () => {
+    const res = await app.inject({ method: "GET", url: "/v1/models" });
+
+    expect(res.statusCode).toBe(200);
+    const json = res.json();
+    const parsed = modelsListResponseSchema.parse(json);
+
+    expect(parsed.object).toBe("list");
+    expect(parsed.data.some((m) => m.x_router.capabilities.tools)).toBe(true);
+  });
+});

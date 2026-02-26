@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import { z } from "zod";
+import { buildModelsListResponse } from "./models-catalog.js";
 
 const healthzResponseSchema = z.object({
   status: z.literal("ok"),
@@ -16,6 +17,10 @@ export function buildApp() {
       service: "1router-api",
       time: new Date().toISOString()
     });
+  });
+
+  app.get("/v1/models", async () => {
+    return buildModelsListResponse();
   });
 
   return app;
