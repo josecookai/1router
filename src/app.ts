@@ -1,6 +1,7 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import { z } from "zod";
 import { buildModelsListResponse } from "./models-catalog.js";
+import { loggerRedactPaths, registerInfraBaseline } from "./infra.js";
 
 const healthzResponseSchema = z.object({
   status: z.literal("ok"),
@@ -8,8 +9,27 @@ const healthzResponseSchema = z.object({
   time: z.string().datetime()
 });
 
-export function buildApp() {
-  const app = Fastify({ logger: false });
+type BuildAppOptions = {
+  logger?: boolean;
+  registerRoutes?: (app: FastifyInstance) => void | Promise<void>;
+};
+
+export function buildApp(options: BuildAppOptions = {}) {
+  const fastifyOptions: FastifyServerOptions = options.logger
+    ? {
+        logger: {
+          level: "info",
+          redact: {
+            paths: loggerRedactPaths,
+            censor: "[REDACTED]"
+          }
+        }
+      }
+    : { logger: false };
+
+  const app = Fastify(fastifyOptions);
+
+  registerInfraBaseline(app);
 
   app.get("/healthz", async () => {
     return healthzResponseSchema.parse({
@@ -22,6 +42,8 @@ export function buildApp() {
   app.get("/v1/models", async () => {
     return buildModelsListResponse();
   });
+
+  void options.registerRoutes?.(app);
 
   return app;
 }
