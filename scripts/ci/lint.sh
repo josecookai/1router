@@ -2,3 +2,4 @@
 set -euo pipefail
 
 npm run lint
+npm run openapi:check
