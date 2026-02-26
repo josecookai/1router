@@ -55,6 +55,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/orgs/{orgId}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read aggregated usage for an org */
+        get: operations["getOrgUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/keys": {
         parameters: {
             query?: never;
@@ -206,6 +223,30 @@ export interface components {
             choices: components["schemas"]["ChatCompletionChoice"][];
             usage: components["schemas"]["ChatCompletionUsage"];
             router: components["schemas"]["ChatCompletionRouterMeta"];
+        };
+        UsageBucket: {
+            bucket: string;
+            requests: number;
+            input_tokens: number;
+            output_tokens: number;
+            total_tokens: number;
+            cost_usd: number;
+            platform_fee_usd: number;
+        };
+        OrgUsageData: {
+            org_id: string;
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            /** @enum {string} */
+            group_by: "hour" | "model";
+            totals: components["schemas"]["UsageBucket"];
+            buckets: components["schemas"]["UsageBucket"][];
+        };
+        OrgUsageResponse: {
+            data: components["schemas"]["OrgUsageData"];
+            meta: components["schemas"]["Meta"];
         };
         CreateApiKeyRequest: {
             provider: string;
@@ -443,6 +484,41 @@ export interface operations {
                 };
             };
             /** @description Invalid request or unsupported model */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+        };
+    };
+    getOrgUsage: {
+        parameters: {
+            query: {
+                from: string;
+                to: string;
+                group_by?: "hour" | "model";
+            };
+            header?: never;
+            path: {
+                orgId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Usage report */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgUsageResponse"];
+                };
+            };
+            /** @description Invalid request */
             400: {
                 headers: {
                     [name: string]: unknown;

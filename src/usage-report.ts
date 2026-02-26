@@ -1,0 +1,159 @@
+import { z } from "zod";
+
+export const usageQuerySchema = z
+  .object({
+    from: z.string().datetime(),
+    to: z.string().datetime(),
+    group_by: z.enum(["hour", "model"]).default("hour")
+  })
+  .refine((value) => new Date(value.from).getTime() < new Date(value.to).getTime(), {
+    message: "`from` must be earlier than `to`",
+    path: ["to"]
+  });
+
+const usageBucketSchema = z.object({
+  bucket: z.string(),
+  requests: z.number().int().nonnegative(),
+  input_tokens: z.number().int().nonnegative(),
+  output_tokens: z.number().int().nonnegative(),
+  total_tokens: z.number().int().nonnegative(),
+  cost_usd: z.number().nonnegative(),
+  platform_fee_usd: z.number().nonnegative()
+});
+
+export const usageReportResponseSchema = z.object({
+  data: z.object({
+    org_id: z.string(),
+    from: z.string().datetime(),
+    to: z.string().datetime(),
+    group_by: z.enum(["hour", "model"]),
+    totals: usageBucketSchema,
+    buckets: z.array(usageBucketSchema)
+  }),
+  meta: z.object({
+    request_id: z.string()
+  })
+});
+
+type UsageEvent = {
+  org_id: string;
+  ts: string;
+  model: string;
+  requests: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number;
+  platform_fee_usd: number;
+};
+
+const FIXTURE_USAGE_EVENTS: UsageEvent[] = [
+  {
+    org_id: "org_demo",
+    ts: "2026-02-26T10:00:00.000Z",
+    model: "openai/gpt-4.1-mini",
+    requests: 10,
+    input_tokens: 1000,
+    output_tokens: 400,
+    cost_usd: 0.12,
+    platform_fee_usd: 0.02
+  },
+  {
+    org_id: "org_demo",
+    ts: "2026-02-26T11:00:00.000Z",
+    model: "openai/gpt-4.1-mini",
+    requests: 6,
+    input_tokens: 700,
+    output_tokens: 240,
+    cost_usd: 0.08,
+    platform_fee_usd: 0.015
+  },
+  {
+    org_id: "org_demo",
+    ts: "2026-02-26T11:00:00.000Z",
+    model: "openai/text-embedding-3-small",
+    requests: 12,
+    input_tokens: 900,
+    output_tokens: 0,
+    cost_usd: 0.03,
+    platform_fee_usd: 0.01
+  }
+];
+
+function emptyBucket(bucket: string) {
+  return {
+    bucket,
+    requests: 0,
+    input_tokens: 0,
+    output_tokens: 0,
+    total_tokens: 0,
+    cost_usd: 0,
+    platform_fee_usd: 0
+  };
+}
+
+function roundMoney(value: number) {
+  return Number(value.toFixed(6));
+}
+
+export class FixtureUsageRepository {
+  constructor(private readonly events: UsageEvent[] = FIXTURE_USAGE_EVENTS) {}
+
+  listForOrg(orgId: string, fromIso: string, toIso: string) {
+    const from = new Date(fromIso).getTime();
+    const to = new Date(toIso).getTime();
+
+    return this.events.filter((event) => {
+      const ts = new Date(event.ts).getTime();
+      return event.org_id === orgId && ts >= from && ts < to;
+    });
+  }
+}
+
+export function buildUsageReportResponse(
+  repo: FixtureUsageRepository,
+  params: { orgId: string; query: unknown; requestId: string }
+) {
+  const query = usageQuerySchema.parse(params.query);
+  const events = repo.listForOrg(params.orgId, query.from, query.to);
+  const map = new Map<string, z.infer<typeof usageBucketSchema>>();
+
+  for (const event of events) {
+    const bucketKey = query.group_by === "hour" ? event.ts.slice(0, 13) + ":00:00.000Z" : event.model;
+    const bucket = map.get(bucketKey) ?? emptyBucket(bucketKey);
+    bucket.requests += event.requests;
+    bucket.input_tokens += event.input_tokens;
+    bucket.output_tokens += event.output_tokens;
+    bucket.total_tokens += event.input_tokens + event.output_tokens;
+    bucket.cost_usd = roundMoney(bucket.cost_usd + event.cost_usd);
+    bucket.platform_fee_usd = roundMoney(bucket.platform_fee_usd + event.platform_fee_usd);
+    map.set(bucketKey, bucket);
+  }
+
+  const buckets = [...map.values()].sort((a, b) => a.bucket.localeCompare(b.bucket));
+  const totals = buckets.reduce(
+    (acc, bucket) => ({
+      bucket: "total",
+      requests: acc.requests + bucket.requests,
+      input_tokens: acc.input_tokens + bucket.input_tokens,
+      output_tokens: acc.output_tokens + bucket.output_tokens,
+      total_tokens: acc.total_tokens + bucket.total_tokens,
+      cost_usd: roundMoney(acc.cost_usd + bucket.cost_usd),
+      platform_fee_usd: roundMoney(acc.platform_fee_usd + bucket.platform_fee_usd)
+    }),
+    emptyBucket("total")
+  );
+
+  return usageReportResponseSchema.parse({
+    data: {
+      org_id: params.orgId,
+      from: query.from,
+      to: query.to,
+      group_by: query.group_by,
+      totals,
+      buckets
+    },
+    meta: {
+      request_id: params.requestId
+    }
+  });
+}

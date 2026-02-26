@@ -7,6 +7,7 @@ import { buildChatCompletionsStubResponse } from "./chat-completions.js";
 import { buildEmbeddingsStubResponse } from "./embeddings.js";
 import { buildModelsListResponse } from "./models-catalog.js";
 import { InMemoryPolicyStore, createPolicySchema } from "./policies.js";
+import { FixtureUsageRepository, buildUsageReportResponse } from "./usage-report.js";
 
 const healthzResponseSchema = z.object({
   status: z.literal("ok"),
@@ -44,6 +45,7 @@ function requestErrorEnvelope(requestId: string, code: string, message: string, 
 type BuildAppOptions = {
   apiKeyStore?: InMemoryApiKeyStore;
   policyStore?: InMemoryPolicyStore;
+  usageRepo?: FixtureUsageRepository;
 };
 
 export function buildApp(options: BuildAppOptions = {}) {
@@ -63,6 +65,7 @@ export function buildApp(options: BuildAppOptions = {}) {
     reply.type("text/css; charset=utf-8");
     return css;
   });
+  const usageRepo = options.usageRepo ?? new FixtureUsageRepository();
 
   app.get("/healthz", async () => {
     return healthzResponseSchema.parse({
@@ -179,6 +182,23 @@ export function buildApp(options: BuildAppOptions = {}) {
       if (error instanceof z.ZodError) {
         reply.code(400);
         return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid policy payload", error.issues);
+      }
+
+      throw error;
+    }
+  });
+
+  app.get("/api/orgs/:orgId/usage", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    try {
+      const { orgId } = request.params as { orgId: string };
+      const query = request.query as Record<string, unknown>;
+      return buildUsageReportResponse(usageRepo, { orgId, query, requestId: request.id });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid usage report request", error.issues);
       }
 
       throw error;
