@@ -171,7 +171,6 @@ export function buildApp(options: BuildAppOptions = {}) {
       throw error;
     }
   });
-
   app.get("/api/models", async (request, reply) => {
     reply.header("x-request-id", request.id);
 
@@ -236,7 +235,6 @@ export function buildApp(options: BuildAppOptions = {}) {
       throw error;
     }
   });
-
   const registerRoutesResult = options.registerRoutes?.(app);
   if (registerRoutesResult && typeof (registerRoutesResult as { then?: unknown }).then === "function") {
     throw new Error("buildApp registerRoutes callback must be synchronous");

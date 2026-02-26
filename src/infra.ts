@@ -118,13 +118,13 @@ export function registerInfraBaseline(app: FastifyInstance) {
 
 export const loggerRedactPaths = [
   "req.headers.authorization",
-  "req.headers.x-api-key",
-  "req.headers.api-key",
-  "req.headers.provider-key",
+  "req.headers[\"x-api-key\"]",
+  "req.headers[\"api-key\"]",
+  "req.headers[\"provider-key\"]",
   "req.headers.provider_api_key",
   "headers.authorization",
-  "headers.x-api-key",
-  "headers.api-key",
-  "headers.provider-key",
+  "headers[\"x-api-key\"]",
+  "headers[\"api-key\"]",
+  "headers[\"provider-key\"]",
   "headers.provider_api_key"
 ];
