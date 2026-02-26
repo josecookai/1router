@@ -51,29 +51,26 @@ export const apiPoliciesListMock: paths["/api/policies"]["get"]["responses"]["20
     {
       "id": "pol_01",
       "name": "default-chat",
-      "match": {
-        "route": "/v1/chat/completions"
+      "route": "/v1/chat/completions",
+      "status": "active",
+      "weights": [
+        {
+          "provider": "openai",
+          "value": 0.7
+        },
+        {
+          "provider": "anthropic",
+          "value": 0.3
+        }
+      ],
+      "fallback_chain": [
+        "anthropic",
+        "openai"
+      ],
+      "constraints": {
+        "max_latency_ms": 3000
       },
-      "action": {
-        "strategy": "failover",
-        "providers": [
-          "openai",
-          "anthropic"
-        ]
-      }
-    },
-    {
-      "id": "pol_02",
-      "name": "low-cost-embeddings",
-      "match": {
-        "route": "/v1/embeddings"
-      },
-      "action": {
-        "strategy": "priority",
-        "providers": [
-          "openai"
-        ]
-      }
+      "created_at": "2026-01-01T00:00:00.000Z"
     }
   ],
   "meta": {

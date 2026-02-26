@@ -73,6 +73,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/models": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List control-plane models for policy UI */
+        get: operations["listControlPlaneModels"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/policies": {
         parameters: {
             query?: never;
@@ -83,7 +100,8 @@ export interface paths {
         /** List routing policies */
         get: operations["listPolicies"];
         put?: never;
-        post?: never;
+        /** Create routing policy (in-memory MVP) */
+        post: operations["createPolicy"];
         delete?: never;
         options?: never;
         head?: never;
@@ -220,22 +238,44 @@ export interface components {
             data: components["schemas"]["CreatedApiKey"];
             meta: components["schemas"]["Meta"];
         };
-        PolicyMatch: {
-            route: string;
+        PolicyWeight: {
+            provider: string;
+            value: number;
         };
-        PolicyAction: {
-            /** @enum {string} */
-            strategy: "priority" | "failover";
-            providers: string[];
+        PolicyConstraints: {
+            max_latency_ms?: number;
+            region?: string;
+        };
+        CreatePolicyRequest: {
+            name: string;
+            route: string;
+            /**
+             * @default active
+             * @enum {string}
+             */
+            status: "active" | "inactive";
+            weights: components["schemas"]["PolicyWeight"][];
+            fallback_chain?: string[];
+            constraints?: components["schemas"]["PolicyConstraints"];
         };
         PolicyRecord: {
             id: string;
             name: string;
-            match: components["schemas"]["PolicyMatch"];
-            action: components["schemas"]["PolicyAction"];
+            route: string;
+            /** @enum {string} */
+            status: "active" | "inactive";
+            weights: components["schemas"]["PolicyWeight"][];
+            fallback_chain: string[];
+            constraints?: components["schemas"]["PolicyConstraints"];
+            /** Format: date-time */
+            created_at: string;
         };
         PoliciesListResponse: {
             data: components["schemas"]["PolicyRecord"][];
+            meta: components["schemas"]["Meta"];
+        };
+        PolicyRecordResponse: {
+            data: components["schemas"]["PolicyRecord"];
             meta: components["schemas"]["Meta"];
         };
     };
@@ -495,6 +535,52 @@ export interface operations {
             };
         };
     };
+    listControlPlaneModels: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Control-plane models list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "openai/gpt-4.1-mini",
+                     *           "provider": "openai",
+                     *           "capabilities": [
+                     *             "tools",
+                     *             "vision",
+                     *             "json_schema"
+                     *           ]
+                     *         },
+                     *         {
+                     *           "id": "anthropic/claude-3-5-sonnet",
+                     *           "provider": "anthropic",
+                     *           "capabilities": [
+                     *             "tools",
+                     *             "vision"
+                     *           ]
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "request_id": "req_cp_models_001"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ModelsListResponse"];
+                };
+            };
+        };
+    };
     listPolicies: {
         parameters: {
             query?: never;
@@ -516,29 +602,26 @@ export interface operations {
                      *         {
                      *           "id": "pol_01",
                      *           "name": "default-chat",
-                     *           "match": {
-                     *             "route": "/v1/chat/completions"
+                     *           "route": "/v1/chat/completions",
+                     *           "status": "active",
+                     *           "weights": [
+                     *             {
+                     *               "provider": "openai",
+                     *               "value": 0.7
+                     *             },
+                     *             {
+                     *               "provider": "anthropic",
+                     *               "value": 0.3
+                     *             }
+                     *           ],
+                     *           "fallback_chain": [
+                     *             "anthropic",
+                     *             "openai"
+                     *           ],
+                     *           "constraints": {
+                     *             "max_latency_ms": 3000
                      *           },
-                     *           "action": {
-                     *             "strategy": "failover",
-                     *             "providers": [
-                     *               "openai",
-                     *               "anthropic"
-                     *             ]
-                     *           }
-                     *         },
-                     *         {
-                     *           "id": "pol_02",
-                     *           "name": "low-cost-embeddings",
-                     *           "match": {
-                     *             "route": "/v1/embeddings"
-                     *           },
-                     *           "action": {
-                     *             "strategy": "priority",
-                     *             "providers": [
-                     *               "openai"
-                     *             ]
-                     *           }
+                     *           "created_at": "2026-01-01T00:00:00.000Z"
                      *         }
                      *       ],
                      *       "meta": {
@@ -547,6 +630,62 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["PoliciesListResponse"];
+                };
+            };
+        };
+    };
+    createPolicy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "name": "ui-policy",
+                 *       "route": "/v1/chat/completions",
+                 *       "status": "active",
+                 *       "weights": [
+                 *         {
+                 *           "provider": "openai",
+                 *           "value": 0.8
+                 *         },
+                 *         {
+                 *           "provider": "anthropic",
+                 *           "value": 0.2
+                 *         }
+                 *       ],
+                 *       "fallback_chain": [
+                 *         "anthropic"
+                 *       ],
+                 *       "constraints": {
+                 *         "max_latency_ms": 2500
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["CreatePolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description Policy created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PolicyRecordResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
                 };
             };
         };
