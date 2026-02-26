@@ -76,6 +76,10 @@ if [[ -z "${GLOBAL_COVERAGE:-}" || -z "${KEY_MODULE_COVERAGE:-}" ]]; then
   if [[ "${COVERAGE_DISABLE_NPM:-0}" != "1" ]] && load_from_npm_coverage; then
     :
   else
+    if [[ "${COVERAGE_DISABLE_NPM:-0}" != "1" ]]; then
+      echo "[coverage] FAIL: npm coverage command failed or could not be parsed" >&2
+      exit 1
+    fi
     GLOBAL_COVERAGE="${GLOBAL_COVERAGE:-100.00}"
     KEY_MODULE_COVERAGE="${KEY_MODULE_COVERAGE:-100.00}"
     echo "[coverage] bootstrap fallback: using default coverage values"

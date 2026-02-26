@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>1router | One API for Every LLM Provider</title>
+    <meta
+      name="description"
+      content="OpenAI-compatible LLM router with passthrough pricing and only 2% platform fee. Route across OpenAI, Anthropic, and OpenAI-compatible providers."
+    />
+    <meta property="og:title" content="1router | Unified LLM API with 2% Platform Fee" />
+    <meta
+      property="og:description"
+      content="One OpenAI-style API for multiple LLM providers. Transparent passthrough pricing, routing policies, and audit-ready usage."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="stylesheet" href="./landing.css" />
+  </head>
+  <body>
+    <div class="bg-grid" aria-hidden="true"></div>
+    <header class="topbar">
+      <div class="brand">1router</div>
+      <nav class="nav">
+        <a href="#features">Features</a>
+        <a href="#api">API</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#security">Security</a>
+      </nav>
+      <a class="btn btn-ghost" href="#cta">Get Access</a>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Developer-first LLM Infrastructure</p>
+          <h1>One API for every LLM provider.</h1>
+          <p class="subhead">
+            OpenAI-compatible routing across OpenAI, Anthropic, and OpenAI-compatible providers with
+            transparent passthrough pricing and only <strong>2% platform fee</strong>.
+          </p>
+          <div class="hero-actions">
+            <a class="btn btn-primary" href="#cta">Request Early Access</a>
+            <a class="btn btn-secondary" href="#api">See API Compatibility</a>
+          </div>
+          <ul class="hero-points">
+            <li>OpenAI-style endpoints: chat, responses, embeddings</li>
+            <li>Default 0-day content retention</li>
+            <li>No plaintext provider API keys stored</li>
+          </ul>
+        </div>
+
+        <div class="hero-panel">
+          <div class="panel-header">
+            <span class="dot green"></span>
+            <span class="dot amber"></span>
+            <span class="dot blue"></span>
+            <span class="panel-title">router execution trace</span>
+          </div>
+          <div class="flow">
+            <div class="node client">client app</div>
+            <div class="arrow">→</div>
+            <div class="node api">/v1/chat/completions</div>
+            <div class="arrow">→</div>
+            <div class="node router">routing engine</div>
+          </div>
+          <div class="providers">
+            <div class="provider">
+              <span>OpenAI</span>
+              <small>p95 820ms · success 99.3%</small>
+            </div>
+            <div class="provider active">
+              <span>Anthropic</span>
+              <small>selected · balanced policy</small>
+            </div>
+            <div class="provider">
+              <span>OpenAI-compatible</span>
+              <small>fallback ready</small>
+            </div>
+          </div>
+          <div class="fee-card">
+            <div>
+              <p class="fee-label">Platform fee</p>
+              <p class="fee-value">2%</p>
+            </div>
+            <div class="fee-note">Passthrough provider cost + auditable usage records</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="metrics">
+        <article>
+          <h2>2%</h2>
+          <p>Platform fee on passthrough model cost</p>
+        </article>
+        <article>
+          <h2>OpenAI-style</h2>
+          <p>Drop-in endpoints for existing SDK integrations</p>
+        </article>
+        <article>
+          <h2>0-day</h2>
+          <p>Default content retention (metadata-only logging)</p>
+        </article>
+      </section>
+
+      <section id="features" class="section">
+        <div class="section-head">
+          <p class="eyebrow">Why teams switch</p>
+          <h2>Cost transparency, routing control, operational safety</h2>
+        </div>
+        <div class="cards">
+          <article class="card">
+            <h3>Unified API Layer</h3>
+            <p>Use one base URL and one auth model while switching providers by policy or request hint.</p>
+            <ul>
+              <li>/v1/chat/completions</li>
+              <li>/v1/responses</li>
+              <li>/v1/embeddings</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Routing Policies</h3>
+            <p>Choose cost-first, latency-first, reliability-first, or balanced routing with failover.</p>
+            <ul>
+              <li>Provider allow/deny lists</li>
+              <li>Fallback chains</li>
+              <li>Region constraints</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Billing & Usage</h3>
+            <p>Provider passthrough pricing plus 2% fee with request-level usage metadata and invoice-ready aggregates.</p>
+            <ul>
+              <li>Token usage tracking</li>
+              <li>Budget alerts</li>
+              <li>Audit-friendly records</li>
+            </ul>
+          </article>
+          <article class="card">
+            <h3>Security Defaults</h3>
+            <p>Built for sensitive workloads with no plaintext provider key storage and redacted logs.</p>
+            <ul>
+              <li>KMS-ready credential refs</li>
+              <li>No prompt logging by default</li>
+              <li>Request IDs + audit metadata</li>
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section id="api" class="section split">
+        <div class="section-head">
+          <p class="eyebrow">API Compatibility</p>
+          <h2>Keep your SDK. Replace the base URL.</h2>
+          <p class="muted">
+            1router mirrors OpenAI-style request/response shapes and adds router metadata under a dedicated field.
+          </p>
+        </div>
+        <div class="code-card" role="region" aria-label="API example">
+          <pre><code>import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: process.env.ROUTER_API_KEY,
+  baseURL: "https://api.1router.example.com/v1"
+});
+
+const res = await client.chat.completions.create({
+  model: "gpt-4o-mini",
+  messages: [{ role: "user", content: "Summarize in JSON" }],
+  stream: false,
+  router: { strategy: "balanced" }
+});
+
+console.log(res.choices[0].message.content);
+console.log(res.router.provider);</code></pre>
+        </div>
+      </section>
+
+      <section id="pricing" class="section">
+        <div class="section-head">
+          <p class="eyebrow">Pricing</p>
+          <h2>Transparent by default</h2>
+        </div>
+        <div class="pricing-grid">
+          <article class="pricing-card featured">
+            <h3>BYO Provider Key</h3>
+            <p class="price">2%</p>
+            <p class="price-caption">Platform fee on estimated/finalized usage</p>
+            <ul>
+              <li>Bring your OpenAI / Anthropic keys</li>
+              <li>We route, meter, and audit</li>
+              <li>No plaintext provider key storage</li>
+            </ul>
+            <a class="btn btn-primary" href="#cta">Start with BYO Key</a>
+          </article>
+          <article class="pricing-card">
+            <h3>Hosted Billing (Roadmap)</h3>
+            <p class="price roadmap">Planned</p>
+            <p class="price-caption">Single invoice, prepay/monthly options</p>
+            <ul>
+              <li>Passthrough + 2% fee</li>
+              <li>SLA and premium routing options</li>
+              <li>Enterprise controls and reporting</li>
+            </ul>
+            <a class="btn btn-secondary" href="#cta">Talk to Us</a>
+          </article>
+        </div>
+      </section>
+
+      <section id="security" class="section security">
+        <div class="section-head">
+          <p class="eyebrow">Security & Compliance</p>
+          <h2>Built for operational trust, not just demos</h2>
+        </div>
+        <div class="security-grid">
+          <div class="security-item">
+            <h3>Default 0-Day Content Storage</h3>
+            <p>Store request metadata only. Prompt/response content storage is opt-in and time-bounded.</p>
+          </div>
+          <div class="security-item">
+            <h3>No Plaintext Provider Keys</h3>
+            <p>Provider credentials are referenced/encrypted and only resolved at runtime with strict access controls.</p>
+          </div>
+          <div class="security-item">
+            <h3>Audit-Ready Metadata</h3>
+            <p>Request IDs, provider IDs, latency, usage, and billing-relevant metadata are traceable without leaking content.</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="cta" class="cta">
+        <div class="cta-copy">
+          <p class="eyebrow">Early Access</p>
+          <h2>Ship once. Route anywhere.</h2>
+          <p>
+            Start with OpenAI-compatible APIs today, then add routing, budgeting, and audit controls as your team grows.
+          </p>
+        </div>
+        <form class="cta-form" action="#" method="post">
+          <label>
+            Work email
+            <input type="email" placeholder="you@company.com" />
+          </label>
+          <label>
+            Primary use case
+            <select>
+              <option>Production app routing</option>
+              <option>Cost optimization</option>
+              <option>Multi-provider reliability</option>
+              <option>Internal platform / gateway</option>
+            </select>
+          </label>
+          <button type="button" class="btn btn-primary btn-block">Request Early Access</button>
+          <p class="form-note">MVP access is rolling. BYO key support lands first.</p>
+        </form>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div>1router</div>
+      <div class="footer-links">
+        <a href="#api">API</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#security">Security</a>
+      </div>
+      <div class="muted">OpenAI-compatible LLM routing with 2% platform fee</div>
+    </footer>
+  </body>
+  </html>

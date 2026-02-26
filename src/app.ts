@@ -1,4 +1,6 @@
 import Fastify from "fastify";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { z } from "zod";
 import { InMemoryApiKeyStore, buildApiKeysListResponse, buildCreateApiKeyResponse } from "./api-keys.js";
 import { buildChatCompletionsStubResponse } from "./chat-completions.js";
@@ -48,6 +50,19 @@ export function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({ logger: false });
   const apiKeyStore = options.apiKeyStore ?? new InMemoryApiKeyStore();
   const policyStore = options.policyStore ?? new InMemoryPolicyStore();
+  const publicDir = path.resolve(process.cwd(), "public");
+
+  app.get("/", async (_request, reply) => {
+    const html = await readFile(path.join(publicDir, "landing.html"), "utf8");
+    reply.type("text/html; charset=utf-8");
+    return html;
+  });
+
+  app.get("/landing.css", async (_request, reply) => {
+    const css = await readFile(path.join(publicDir, "landing.css"), "utf8");
+    reply.type("text/css; charset=utf-8");
+    return css;
+  });
 
   app.get("/healthz", async () => {
     return healthzResponseSchema.parse({
