@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import { z } from "zod";
+import { InMemoryApiKeyStore, buildApiKeysListResponse, buildCreateApiKeyResponse } from "./api-keys.js";
 import { buildEmbeddingsStubResponse } from "./embeddings.js";
 import { buildModelsListResponse } from "./models-catalog.js";
 
@@ -25,8 +26,13 @@ function embeddingsErrorEnvelope(
   };
 }
 
-export function buildApp() {
+type BuildAppOptions = {
+  apiKeyStore?: InMemoryApiKeyStore;
+};
+
+export function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({ logger: false });
+  const apiKeyStore = options.apiKeyStore ?? new InMemoryApiKeyStore();
 
   app.get("/healthz", async () => {
     return healthzResponseSchema.parse({
@@ -57,6 +63,34 @@ export function buildApp() {
         "UNSUPPORTED_MODEL",
         error instanceof Error ? error.message : "Unsupported embeddings model"
       );
+    }
+  });
+
+  app.get("/api/keys", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+    return buildApiKeysListResponse(apiKeyStore, request.id);
+  });
+
+  app.post("/api/keys", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    try {
+      reply.code(201);
+      return buildCreateApiKeyResponse(apiKeyStore, request.body, request.id);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return {
+          error: {
+            code: "INVALID_REQUEST",
+            message: "Invalid API key create request",
+            request_id: request.id,
+            details: error.issues
+          }
+        };
+      }
+
+      throw error;
     }
   });
 
