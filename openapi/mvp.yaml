@@ -1,0 +1,53 @@
+openapi: 3.1.0
+info:
+  title: 1router MVP API
+  version: 0.1.0
+paths:
+  /v1/models:
+    get:
+      summary: List unified models catalog
+      operationId: listModels
+      responses:
+        '200':
+          description: OpenAI-compatible model list with router extension metadata.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [object, data]
+                properties:
+                  object:
+                    type: string
+                    const: list
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      required: [id, object, created, owned_by, x_router]
+                      properties:
+                        id:
+                          type: string
+                        object:
+                          type: string
+                          const: model
+                        created:
+                          type: integer
+                          minimum: 0
+                        owned_by:
+                          type: string
+                        x_router:
+                          type: object
+                          required: [provider, capabilities]
+                          properties:
+                            provider:
+                              type: string
+                            capabilities:
+                              type: object
+                              required: [tools, vision, json_schema]
+                              properties:
+                                tools:
+                                  type: boolean
+                                vision:
+                                  type: boolean
+                                json_schema:
+                                  type: boolean
