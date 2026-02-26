@@ -21,6 +21,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/embeddings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create embeddings (stub) */
+        post: operations["createEmbeddings"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/keys": {
         parameters: {
             query?: never;
@@ -70,6 +87,45 @@ export interface components {
         ModelsListResponse: {
             data: components["schemas"]["Model"][];
             meta: components["schemas"]["Meta"];
+        };
+        EmbeddingsRequest: {
+            model: string;
+            input: string | string[];
+        };
+        EmbeddingRow: {
+            /** @enum {string} */
+            object: "embedding";
+            embedding: number[];
+            index: number;
+        };
+        EmbeddingsUsage: {
+            prompt_tokens: number;
+            total_tokens: number;
+        };
+        EmbeddingsRouterMeta: {
+            provider: string;
+            /** @enum {boolean} */
+            stub: true;
+        };
+        EmbeddingsResponse: {
+            /** @enum {string} */
+            object: "list";
+            data: components["schemas"]["EmbeddingRow"][];
+            model: string;
+            usage: components["schemas"]["EmbeddingsUsage"];
+            x_router: components["schemas"]["EmbeddingsRouterMeta"];
+        };
+        EmbeddingsError: {
+            error: {
+                /** @enum {string} */
+                code: "INVALID_REQUEST" | "UNSUPPORTED_MODEL";
+                message: string;
+                request_id: string;
+            } & {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
         };
         ApiKeyRecord: {
             id: string;
@@ -150,6 +206,82 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["ModelsListResponse"];
+                };
+            };
+        };
+    };
+    createEmbeddings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "model": "openai/text-embedding-3-small",
+                 *       "input": [
+                 *         "hello",
+                 *         "world"
+                 *       ]
+                 *     }
+                 */
+                "application/json": components["schemas"]["EmbeddingsRequest"];
+            };
+        };
+        responses: {
+            /** @description Embeddings created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "object": "list",
+                     *       "data": [
+                     *         {
+                     *           "object": "embedding",
+                     *           "embedding": [
+                     *             0.532,
+                     *             0.05,
+                     *             0.804124
+                     *           ],
+                     *           "index": 0
+                     *         },
+                     *         {
+                     *           "object": "embedding",
+                     *           "embedding": [
+                     *             0.552,
+                     *             0.05,
+                     *             0.845361
+                     *           ],
+                     *           "index": 1
+                     *         }
+                     *       ],
+                     *       "model": "openai/text-embedding-3-small",
+                     *       "usage": {
+                     *         "prompt_tokens": 3,
+                     *         "total_tokens": 3
+                     *       },
+                     *       "x_router": {
+                     *         "provider": "openai",
+                     *         "stub": true
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["EmbeddingsResponse"];
+                };
+            };
+            /** @description Invalid request or unsupported model */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
                 };
             };
         };
