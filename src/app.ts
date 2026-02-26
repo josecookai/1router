@@ -4,6 +4,7 @@ import { InMemoryApiKeyStore, buildApiKeysListResponse, buildCreateApiKeyRespons
 import { buildChatCompletionsStubResponse } from "./chat-completions.js";
 import { buildEmbeddingsStubResponse } from "./embeddings.js";
 import { buildModelsListResponse } from "./models-catalog.js";
+import { InMemoryPolicyStore, createPolicySchema } from "./policies.js";
 
 const healthzResponseSchema = z.object({
   status: z.literal("ok"),
@@ -40,11 +41,13 @@ function requestErrorEnvelope(requestId: string, code: string, message: string, 
 
 type BuildAppOptions = {
   apiKeyStore?: InMemoryApiKeyStore;
+  policyStore?: InMemoryPolicyStore;
 };
 
 export function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({ logger: false });
   const apiKeyStore = options.apiKeyStore ?? new InMemoryApiKeyStore();
+  const policyStore = options.policyStore ?? new InMemoryPolicyStore();
 
   app.get("/healthz", async () => {
     return healthzResponseSchema.parse({
@@ -112,9 +115,55 @@ export function buildApp(options: BuildAppOptions = {}) {
     } catch (error) {
       if (error instanceof z.ZodError) {
         reply.code(400);
-        return {
-          ...requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid API key create request", error.issues)
-        };
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid API key create request", error.issues);
+      }
+
+      throw error;
+    }
+  });
+
+  app.get("/api/models", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    const controlPlaneModels = buildModelsListResponse().data.map((model) => ({
+      id: model.id,
+      provider: model.x_router.provider,
+      capabilities: [
+        ...(model.x_router.capabilities.tools ? ["tools"] : []),
+        ...(model.x_router.capabilities.vision ? ["vision"] : []),
+        ...(model.x_router.capabilities.json_schema ? ["json_schema"] : [])
+      ]
+    }));
+
+    return {
+      data: controlPlaneModels,
+      meta: { request_id: request.id }
+    };
+  });
+
+  app.get("/api/policies", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+    return {
+      data: policyStore.list(),
+      meta: { request_id: request.id }
+    };
+  });
+
+  app.post("/api/policies", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    try {
+      const payload = createPolicySchema.parse(request.body);
+      const created = policyStore.create(payload);
+      reply.code(201);
+      return {
+        data: created,
+        meta: { request_id: request.id }
+      };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid policy payload", error.issues);
       }
 
       throw error;
