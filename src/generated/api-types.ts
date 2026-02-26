@@ -48,7 +48,8 @@ export interface paths {
         /** List configured provider keys */
         get: operations["listApiKeys"];
         put?: never;
-        post?: never;
+        /** Create provider API key (returns plaintext once) */
+        post: operations["createApiKey"];
         delete?: never;
         options?: never;
         head?: never;
@@ -127,7 +128,11 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        ApiKeyRecord: {
+        CreateApiKeyRequest: {
+            provider: string;
+            label: string;
+        };
+        ApiKeyMetadata: {
             id: string;
             provider: string;
             label: string;
@@ -135,8 +140,23 @@ export interface components {
             /** @enum {string} */
             status: "active" | "inactive";
         };
+        ApiKeyRecord: components["schemas"]["ApiKeyMetadata"];
+        CreatedApiKey: {
+            id: string;
+            provider: string;
+            label: string;
+            key: string;
+            key_prefix: string;
+            last4: string;
+            /** @enum {string} */
+            status: "active" | "inactive";
+        };
         ApiKeysListResponse: {
-            data: components["schemas"]["ApiKeyRecord"][];
+            data: components["schemas"]["ApiKeyMetadata"][];
+            meta: components["schemas"]["Meta"];
+        };
+        CreateApiKeyResponse: {
+            data: components["schemas"]["CreatedApiKey"];
             meta: components["schemas"]["Meta"];
         };
         PolicyMatch: {
@@ -325,6 +345,45 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["ApiKeysListResponse"];
+                };
+            };
+        };
+    };
+    createApiKey: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "provider": "openai",
+                 *       "label": "prod-openai"
+                 *     }
+                 */
+                "application/json": components["schemas"]["CreateApiKeyRequest"];
+            };
+        };
+        responses: {
+            /** @description API key created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateApiKeyResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
                 };
             };
         };

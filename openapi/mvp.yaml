@@ -75,6 +75,31 @@ paths:
               schema:
                 $ref: "#/components/schemas/EmbeddingsError"
   /api/keys:
+    post:
+      summary: Create provider API key (returns plaintext once)
+      operationId: createApiKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateApiKeyRequest"
+            example:
+              provider: openai
+              label: prod-openai
+      responses:
+        "201":
+          description: API key created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateApiKeyResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingsError"
     get:
       summary: List configured provider keys
       operationId: listApiKeys
@@ -252,7 +277,18 @@ components:
               type: string
             request_id:
               type: string
-    ApiKeyRecord:
+    CreateApiKeyRequest:
+      type: object
+      additionalProperties: false
+      required: [provider, label]
+      properties:
+        provider:
+          type: string
+          minLength: 1
+        label:
+          type: string
+          minLength: 1
+    ApiKeyMetadata:
       type: object
       additionalProperties: false
       required: [id, provider, label, last4, status]
@@ -268,6 +304,29 @@ components:
         status:
           type: string
           enum: [active, inactive]
+    ApiKeyRecord:
+      allOf:
+        - $ref: "#/components/schemas/ApiKeyMetadata"
+    CreatedApiKey:
+      type: object
+      additionalProperties: false
+      required: [id, provider, label, key, key_prefix, last4, status]
+      properties:
+        id:
+          type: string
+        provider:
+          type: string
+        label:
+          type: string
+        key:
+          type: string
+        key_prefix:
+          type: string
+        last4:
+          type: string
+        status:
+          type: string
+          enum: [active, inactive]
     ApiKeysListResponse:
       type: object
       additionalProperties: false
@@ -276,7 +335,16 @@ components:
         data:
           type: array
           items:
-            $ref: "#/components/schemas/ApiKeyRecord"
+            $ref: "#/components/schemas/ApiKeyMetadata"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    CreateApiKeyResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/CreatedApiKey"
         meta:
           $ref: "#/components/schemas/Meta"
     PolicyMatch:
