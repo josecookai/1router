@@ -38,6 +38,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/chat/completions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create chat completion (non-streaming stub) */
+        post: operations["createChatCompletion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/keys": {
         parameters: {
             query?: never;
@@ -127,6 +144,50 @@ export interface components {
             };
         } & {
             [key: string]: unknown;
+        };
+        ChatMessage: {
+            /** @enum {string} */
+            role: "system" | "user" | "assistant";
+            content: string;
+        };
+        ChatCompletionsRequest: {
+            model: string;
+            messages: components["schemas"]["ChatMessage"][];
+            /** @enum {boolean} */
+            stream?: false;
+            temperature?: number;
+            top_p?: number;
+            max_tokens?: number;
+        };
+        ChatCompletionChoice: {
+            index: number;
+            message: {
+                /** @enum {string} */
+                role: "assistant";
+                content: string;
+            };
+            /** @enum {string} */
+            finish_reason: "stop";
+        };
+        ChatCompletionUsage: {
+            prompt_tokens: number;
+            completion_tokens: number;
+            total_tokens: number;
+        };
+        ChatCompletionRouterMeta: {
+            provider: string;
+            provider_model: string;
+            request_id: string;
+        };
+        ChatCompletionsResponse: {
+            id: string;
+            /** @enum {string} */
+            object: "chat.completion";
+            created: number;
+            model: string;
+            choices: components["schemas"]["ChatCompletionChoice"][];
+            usage: components["schemas"]["ChatCompletionUsage"];
+            router: components["schemas"]["ChatCompletionRouterMeta"];
         };
         CreateApiKeyRequest: {
             provider: string;
@@ -293,6 +354,52 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["EmbeddingsResponse"];
+                };
+            };
+            /** @description Invalid request or unsupported model */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+        };
+    };
+    createChatCompletion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "model": "openai/gpt-4.1-mini",
+                 *       "messages": [
+                 *         {
+                 *           "role": "user",
+                 *           "content": "Say hi"
+                 *         }
+                 *       ],
+                 *       "stream": false,
+                 *       "temperature": 0.7
+                 *     }
+                 */
+                "application/json": components["schemas"]["ChatCompletionsRequest"];
+            };
+        };
+        responses: {
+            /** @description Chat completion created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ChatCompletionsResponse"];
                 };
             };
             /** @description Invalid request or unsupported model */

@@ -39,4 +39,19 @@ describe("openai stub embeddings adapter", () => {
     expect(batch.data.map((row) => row.index)).toEqual([0, 1]);
     expect(batch.usage.total_tokens).toBeGreaterThan(0);
   });
+
+  it("creates a non-streaming chat completion stub", async () => {
+    const adapter = new OpenAIStubProviderAdapter();
+
+    const result = await adapter.createChatCompletion({
+      model: "openai/gpt-4.1-mini",
+      messages: [{ role: "user", content: "Hello there" }],
+      stream: false
+    });
+
+    expect(result.provider).toBe("openai");
+    expect(result.provider_model).toBe("openai/gpt-4.1-mini");
+    expect(result.content).toContain("Hello there");
+    expect(result.usage.total_tokens).toBeGreaterThan(0);
+  });
 });

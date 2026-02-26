@@ -22,10 +22,38 @@ export type EmbeddingsProviderResult = {
   };
 };
 
+export type ChatCompletionMessage = {
+  role: "system" | "user" | "assistant";
+  content: string;
+};
+
+export type ChatCompletionInput = {
+  model: string;
+  messages: ChatCompletionMessage[];
+  stream?: boolean;
+  temperature?: number;
+  top_p?: number;
+  max_tokens?: number;
+};
+
+export type ChatCompletionProviderResult = {
+  provider: string;
+  provider_model: string;
+  model: string;
+  content: string;
+  usage: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
+};
+
 export interface ProviderAdapter {
   readonly provider: string;
   supportsEmbeddings(model: string): boolean;
   createEmbeddings(request: EmbeddingsInput): Promise<EmbeddingsProviderResult>;
+  supportsChatCompletions(model: string): boolean;
+  createChatCompletion(request: ChatCompletionInput): Promise<ChatCompletionProviderResult>;
 }
 
 export class ProviderAdapterRegistry {
@@ -44,6 +72,17 @@ export class ProviderAdapterRegistry {
     const adapter = this.adapters.get(provider);
 
     if (!adapter || !adapter.supportsEmbeddings(model)) {
+      return null;
+    }
+
+    return adapter;
+  }
+
+  resolveChatAdapter(model: string) {
+    const provider = model.split("/", 1)[0] ?? "";
+    const adapter = this.adapters.get(provider);
+
+    if (!adapter || !adapter.supportsChatCompletions(model)) {
       return null;
     }
 
@@ -71,6 +110,10 @@ export class OpenAIStubProviderAdapter implements ProviderAdapter {
     return model.startsWith("openai/");
   }
 
+  supportsChatCompletions(model: string) {
+    return model.startsWith("openai/");
+  }
+
   async createEmbeddings(request: EmbeddingsInput): Promise<EmbeddingsProviderResult> {
     const parsed = embeddingsInputSchema.parse(request);
     const inputs = Array.isArray(parsed.input) ? parsed.input : [parsed.input];
@@ -85,6 +128,26 @@ export class OpenAIStubProviderAdapter implements ProviderAdapter {
       usage: {
         prompt_tokens: estimateTokens(inputs),
         total_tokens: estimateTokens(inputs)
+      }
+    };
+  }
+
+  async createChatCompletion(request: ChatCompletionInput): Promise<ChatCompletionProviderResult> {
+    const prompt = request.messages.map((m) => `${m.role}: ${m.content}`).join("\n");
+    const lastUserMessage = [...request.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+    const content = `Stub response: ${lastUserMessage || "ok"}`;
+    const promptTokens = Math.max(1, Math.ceil(prompt.length / 4));
+    const completionTokens = Math.max(1, Math.ceil(content.length / 4));
+
+    return {
+      provider: this.provider,
+      provider_model: request.model,
+      model: request.model,
+      content,
+      usage: {
+        prompt_tokens: promptTokens,
+        completion_tokens: completionTokens,
+        total_tokens: promptTokens + completionTokens
       }
     };
   }
