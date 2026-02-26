@@ -1,4 +1,4 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance, type FastifyServerOptions } from "fastify";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
@@ -6,6 +6,7 @@ import { InMemoryApiKeyStore, buildApiKeysListResponse, buildCreateApiKeyRespons
 import { ApiKeyStoreRouterAuthRepository, authenticateRouterKey } from "./auth.js";
 import { buildChatCompletionsStubResponse } from "./chat-completions.js";
 import { buildEmbeddingsStubResponse } from "./embeddings.js";
+import { loggerRedactPaths, registerInfraBaseline } from "./infra.js";
 import { buildModelsListResponse } from "./models-catalog.js";
 import { InMemoryPolicyStore, type PolicyRepository, createPolicySchema } from "./policies.js";
 import { FixtureUsageRepository, buildUsageReportResponse } from "./usage-report.js";
@@ -44,16 +45,31 @@ function requestErrorEnvelope(requestId: string, code: string, message: string, 
 }
 
 type BuildAppOptions = {
+  logger?: boolean;
   apiKeyStore?: InMemoryApiKeyStore;
   policyStore?: PolicyRepository;
   usageRepo?: FixtureUsageRepository;
+  registerRoutes?: (app: FastifyInstance) => void;
 };
 
 export function buildApp(options: BuildAppOptions = {}) {
-  const app = Fastify({ logger: false });
+  const fastifyOptions: FastifyServerOptions = options.logger
+    ? {
+        logger: {
+          level: "info",
+          redact: {
+            paths: loggerRedactPaths,
+            censor: "[REDACTED]"
+          }
+        }
+      }
+    : { logger: false };
+
+  const app = Fastify(fastifyOptions);
   const apiKeyStore = options.apiKeyStore ?? new InMemoryApiKeyStore();
   const authRepo = new ApiKeyStoreRouterAuthRepository(apiKeyStore);
   const policyStore = options.policyStore ?? new InMemoryPolicyStore();
+  const usageRepo = options.usageRepo ?? new FixtureUsageRepository();
   const publicDir = path.resolve(process.cwd(), "public");
 
   app.get("/", async (_request, reply) => {
@@ -67,7 +83,8 @@ export function buildApp(options: BuildAppOptions = {}) {
     reply.type("text/css; charset=utf-8");
     return css;
   });
-  const usageRepo = options.usageRepo ?? new FixtureUsageRepository();
+
+  registerInfraBaseline(app);
 
   app.get("/healthz", async () => {
     return healthzResponseSchema.parse({
@@ -219,6 +236,11 @@ export function buildApp(options: BuildAppOptions = {}) {
       throw error;
     }
   });
+
+  const registerRoutesResult = options.registerRoutes?.(app);
+  if (registerRoutesResult && typeof (registerRoutesResult as { then?: unknown }).then === "function") {
+    throw new Error("buildApp registerRoutes callback must be synchronous");
+  }
 
   return app;
 }
