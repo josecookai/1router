@@ -6,6 +6,7 @@ export const controlPlaneModelsMock: paths["/api/models"]["get"]["responses"]["2
     {
       "id": "openai/gpt-4.1-mini",
       "provider": "openai",
+      "status": "active",
       "capabilities": [
         "tools",
         "vision",
@@ -15,6 +16,7 @@ export const controlPlaneModelsMock: paths["/api/models"]["get"]["responses"]["2
     {
       "id": "anthropic/claude-3-5-sonnet",
       "provider": "anthropic",
+      "status": "active",
       "capabilities": [
         "tools",
         "vision"

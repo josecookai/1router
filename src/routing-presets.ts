@@ -22,6 +22,10 @@ const PRESET_WEIGHTS: Record<RoutingPreset, { cost: number; latency: number; suc
   balanced: { cost: 0.34, latency: 0.33, success: 0.33 }
 };
 
+export function getRoutingPresetWeights(preset: RoutingPreset) {
+  return PRESET_WEIGHTS[preset];
+}
+
 function normalizeAscending(value: number, min: number, max: number) {
   if (max === min) return 1;
   return 1 - (value - min) / (max - min);
