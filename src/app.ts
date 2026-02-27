@@ -24,13 +24,20 @@ import {
   sliDashboardQuerySchema,
   sliDashboardResponseSchema
 } from "./slo-metrics.js";
-import { FixtureUsageRepository, buildUsageReportResponse } from "./usage-report.js";
+import { FixtureUsageRepository, buildMonthlyInvoiceResponse, buildUsageReportResponse } from "./usage-report.js";
 
 const healthzResponseSchema = z.object({
   status: z.literal("ok"),
   service: z.literal("1router-api"),
   time: z.string().datetime()
 });
+
+const controlPlaneModelsQuerySchema = z
+  .object({
+    provider: z.enum(["openai", "anthropic", "google"]).optional(),
+    status: z.enum(["active", "inactive"]).optional()
+  })
+  .strict();
 
 function embeddingsErrorEnvelope(
   requestId: string,
@@ -246,20 +253,33 @@ export function buildApp(options: BuildAppOptions = {}) {
   app.get("/api/models", async (request, reply) => {
     reply.header("x-request-id", request.id);
 
-    const controlPlaneModels = buildModelsListResponse().data.map((model) => ({
-      id: model.id,
-      provider: model.x_router.provider,
-      capabilities: [
-        ...(model.x_router.capabilities.tools ? ["tools"] : []),
-        ...(model.x_router.capabilities.vision ? ["vision"] : []),
-        ...(model.x_router.capabilities.json_schema ? ["json_schema"] : [])
-      ]
-    }));
+    try {
+      const query = controlPlaneModelsQuerySchema.parse(request.query ?? {});
+      const controlPlaneModels = buildModelsListResponse().data
+        .map((model) => ({
+          id: model.id,
+          provider: model.x_router.provider,
+          status: "active" as const,
+          capabilities: [
+            ...(model.x_router.capabilities.tools ? ["tools"] : []),
+            ...(model.x_router.capabilities.vision ? ["vision"] : []),
+            ...(model.x_router.capabilities.json_schema ? ["json_schema"] : [])
+          ]
+        }))
+        .filter((model) => (query.provider ? model.provider === query.provider : true))
+        .filter((model) => (query.status ? model.status === query.status : true));
 
-    return {
-      data: controlPlaneModels,
-      meta: { request_id: request.id }
-    };
+      return {
+        data: controlPlaneModels,
+        meta: { request_id: request.id }
+      };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid models list query", error.issues);
+      }
+      throw error;
+    }
   });
 
   app.get("/api/orgs", async (request, reply) => {
@@ -414,6 +434,22 @@ export function buildApp(options: BuildAppOptions = {}) {
       if (error instanceof z.ZodError) {
         reply.code(400);
         return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid usage report request", error.issues);
+      }
+
+      throw error;
+    }
+  });
+
+  app.get("/api/orgs/:orgId/invoice", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    try {
+      const { orgId } = z.object({ orgId: z.string().min(1) }).parse(request.params);
+      return buildMonthlyInvoiceResponse(usageRepo, { orgId, query: request.query, requestId: request.id });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid invoice request", error.issues);
       }
 
       throw error;
