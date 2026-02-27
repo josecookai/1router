@@ -3,8 +3,8 @@ import { buildDefaultProviderAdapterRegistry } from "./provider-adapters.js";
 
 export const responsesRequestSchema = z
   .object({
-    model: z.string().min(1),
-    input: z.string().min(1),
+    model: z.string().trim().min(1),
+    input: z.string().trim().min(1),
     stream: z.literal(false).optional(),
     temperature: z.number().min(0).max(2).optional(),
     max_output_tokens: z.number().int().positive().optional()
