@@ -289,6 +289,15 @@ export interface components {
             total_tokens: number;
             cost_usd: number;
             platform_fee_usd: number;
+            provisional: boolean;
+            /** Format: date-time */
+            finalized_at: string | null;
+        };
+        UsageSummary: {
+            provisional: boolean;
+            /** Format: date-time */
+            finalized_at: string | null;
+            totals: components["schemas"]["UsageBucket"];
         };
         OrgUsageData: {
             org_id: string;
@@ -302,6 +311,7 @@ export interface components {
             /** Format: date-time */
             finalized_at: string | null;
             totals: components["schemas"]["UsageBucket"];
+            summary: components["schemas"]["UsageSummary"];
             buckets: components["schemas"]["UsageBucket"][];
         };
         OrgUsageResponse: {

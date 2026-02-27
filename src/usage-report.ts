@@ -18,7 +18,9 @@ const usageBucketSchema = z.object({
   output_tokens: z.number().int().nonnegative(),
   total_tokens: z.number().int().nonnegative(),
   cost_usd: z.number().nonnegative(),
-  platform_fee_usd: z.number().nonnegative()
+  platform_fee_usd: z.number().nonnegative(),
+  provisional: z.boolean(),
+  finalized_at: z.string().datetime().nullable()
 });
 
 export const usageReportResponseSchema = z.object({
@@ -30,6 +32,11 @@ export const usageReportResponseSchema = z.object({
     provisional: z.boolean(),
     finalized_at: z.string().datetime().nullable(),
     totals: usageBucketSchema,
+    summary: z.object({
+      provisional: z.boolean(),
+      finalized_at: z.string().datetime().nullable(),
+      totals: usageBucketSchema
+    }),
     buckets: z.array(usageBucketSchema)
   }),
   meta: z.object({
@@ -41,6 +48,7 @@ type UsageEvent = {
   org_id: string;
   ts: string;
   model: string;
+  finalized_at: string | null;
   requests: number;
   input_tokens: number;
   output_tokens: number;
@@ -53,6 +61,7 @@ const FIXTURE_USAGE_EVENTS: UsageEvent[] = [
     org_id: "org_demo",
     ts: "2026-02-26T10:00:00.000Z",
     model: "openai/gpt-4.1-mini",
+    finalized_at: "2026-02-26T10:30:00.000Z",
     requests: 10,
     input_tokens: 1000,
     output_tokens: 400,
@@ -63,6 +72,7 @@ const FIXTURE_USAGE_EVENTS: UsageEvent[] = [
     org_id: "org_demo",
     ts: "2026-02-26T11:00:00.000Z",
     model: "openai/gpt-4.1-mini",
+    finalized_at: null,
     requests: 6,
     input_tokens: 700,
     output_tokens: 240,
@@ -73,6 +83,7 @@ const FIXTURE_USAGE_EVENTS: UsageEvent[] = [
     org_id: "org_demo",
     ts: "2026-02-26T11:00:00.000Z",
     model: "openai/text-embedding-3-small",
+    finalized_at: null,
     requests: 12,
     input_tokens: 900,
     output_tokens: 0,
@@ -89,7 +100,9 @@ function emptyBucket(bucket: string) {
     output_tokens: 0,
     total_tokens: 0,
     cost_usd: 0,
-    platform_fee_usd: 0
+    platform_fee_usd: 0,
+    provisional: false,
+    finalized_at: null
   };
 }
 
@@ -131,6 +144,13 @@ export function buildUsageReportResponse(
     bucket.total_tokens += event.input_tokens + event.output_tokens;
     bucket.cost_usd = roundMoney(bucket.cost_usd + event.cost_usd);
     bucket.platform_fee_usd = roundMoney(bucket.platform_fee_usd + event.platform_fee_usd);
+    if (event.finalized_at === null) {
+      bucket.provisional = true;
+      bucket.finalized_at = null;
+    } else if (!bucket.provisional) {
+      bucket.finalized_at =
+        bucket.finalized_at === null || event.finalized_at > bucket.finalized_at ? event.finalized_at : bucket.finalized_at;
+    }
     map.set(bucketKey, bucket);
   }
 
@@ -143,10 +163,22 @@ export function buildUsageReportResponse(
       output_tokens: acc.output_tokens + bucket.output_tokens,
       total_tokens: acc.total_tokens + bucket.total_tokens,
       cost_usd: roundMoney(acc.cost_usd + bucket.cost_usd),
-      platform_fee_usd: roundMoney(acc.platform_fee_usd + bucket.platform_fee_usd)
+      platform_fee_usd: roundMoney(acc.platform_fee_usd + bucket.platform_fee_usd),
+      provisional: acc.provisional || bucket.provisional,
+      finalized_at:
+        acc.provisional || bucket.provisional
+          ? null
+          : acc.finalized_at === null || (bucket.finalized_at !== null && bucket.finalized_at > acc.finalized_at)
+            ? bucket.finalized_at
+            : acc.finalized_at
     }),
     emptyBucket("total")
   );
+  const summary = {
+    provisional: totals.provisional,
+    finalized_at: totals.finalized_at,
+    totals
+  };
 
   return usageReportResponseSchema.parse({
     data: {
@@ -157,6 +189,7 @@ export function buildUsageReportResponse(
       provisional,
       finalized_at: finalizedAt,
       totals,
+      summary,
       buckets
     },
     meta: {

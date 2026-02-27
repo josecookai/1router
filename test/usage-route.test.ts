@@ -30,6 +30,10 @@ describe("GET /api/orgs/:orgId/usage", () => {
     expect(parsed.data.finalized_at).toBe("2026-02-26T12:00:00.000Z");
     expect(parsed.data.buckets).toHaveLength(2);
     expect(parsed.data.totals.requests).toBe(28);
+    expect(parsed.data.totals.provisional).toBe(true);
+    expect(parsed.data.summary.provisional).toBe(true);
+    expect(parsed.data.summary.finalized_at).toBeNull();
+    expect(parsed.data.buckets.some((bucket) => bucket.provisional)).toBe(true);
   });
 
   it("returns 400 shared error envelope for invalid query params", async () => {
