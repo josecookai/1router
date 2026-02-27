@@ -9,8 +9,21 @@ import { buildEmbeddingsStubResponse } from "./embeddings.js";
 import { loggerRedactPaths, registerInfraBaseline } from "./infra.js";
 import { InMemoryIdempotencyStore, buildPayloadFingerprint } from "./idempotency.js";
 import { buildModelsListResponse } from "./models-catalog.js";
+import {
+  InMemoryOrgProjectStore,
+  createOrgSchema,
+  createProjectSchema,
+  type OrgProjectRepository,
+  updateOrgSchema,
+  updateProjectSchema
+} from "./org-projects.js";
 import { InMemoryPolicyStore, type PolicyRepository, createPolicySchema } from "./policies.js";
 import { buildResponsesStubResponse, type ResponsesResponse } from "./responses.js";
+import {
+  InMemorySliMetricsStore,
+  sliDashboardQuerySchema,
+  sliDashboardResponseSchema
+} from "./slo-metrics.js";
 import { FixtureUsageRepository, buildUsageReportResponse } from "./usage-report.js";
 
 const healthzResponseSchema = z.object({
@@ -50,8 +63,10 @@ type BuildAppOptions = {
   logger?: boolean;
   apiKeyStore?: InMemoryApiKeyStore;
   policyStore?: PolicyRepository;
+  orgProjectStore?: OrgProjectRepository;
   usageRepo?: FixtureUsageRepository;
   responsesIdempotencyStore?: InMemoryIdempotencyStore<ResponsesResponse>;
+  sliMetricsStore?: InMemorySliMetricsStore;
   registerRoutes?: (app: FastifyInstance) => void;
 };
 
@@ -72,9 +87,12 @@ export function buildApp(options: BuildAppOptions = {}) {
   const apiKeyStore = options.apiKeyStore ?? new InMemoryApiKeyStore();
   const authRepo = new ApiKeyStoreRouterAuthRepository(apiKeyStore);
   const policyStore = options.policyStore ?? new InMemoryPolicyStore();
+  const orgProjectStore = options.orgProjectStore ?? new InMemoryOrgProjectStore();
   const usageRepo = options.usageRepo ?? new FixtureUsageRepository();
   const responsesIdempotencyStore = options.responsesIdempotencyStore ?? new InMemoryIdempotencyStore<ResponsesResponse>();
+  const sliMetricsStore = options.sliMetricsStore ?? new InMemorySliMetricsStore();
   const publicDir = path.resolve(process.cwd(), "public");
+  (app as FastifyInstance & { sliMetricsStore?: InMemorySliMetricsStore }).sliMetricsStore = sliMetricsStore;
 
   app.get("/", async (_request, reply) => {
     const html = await readFile(path.join(publicDir, "landing.html"), "utf8");
@@ -244,6 +262,118 @@ export function buildApp(options: BuildAppOptions = {}) {
     };
   });
 
+  app.get("/api/orgs", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+    return {
+      data: orgProjectStore.listOrgs(),
+      meta: { request_id: request.id }
+    };
+  });
+
+  app.post("/api/orgs", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    try {
+      const payload = createOrgSchema.parse(request.body);
+      const created = orgProjectStore.createOrg(payload);
+      reply.code(201);
+      return {
+        data: created,
+        meta: { request_id: request.id }
+      };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid org payload", error.issues);
+      }
+
+      throw error;
+    }
+  });
+
+  app.patch("/api/orgs/:orgId", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    try {
+      const { orgId } = z.object({ orgId: z.string().min(1) }).parse(request.params);
+      const payload = updateOrgSchema.parse(request.body);
+      const updated = orgProjectStore.updateOrg(orgId, payload);
+
+      if (!updated) {
+        reply.code(404);
+        return requestErrorEnvelope(request.id, "NOT_FOUND", `Org not found: ${orgId}`);
+      }
+
+      return {
+        data: updated,
+        meta: { request_id: request.id }
+      };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid org payload", error.issues);
+      }
+
+      throw error;
+    }
+  });
+
+  app.get("/api/projects", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+    return {
+      data: orgProjectStore.listProjects(),
+      meta: { request_id: request.id }
+    };
+  });
+
+  app.post("/api/projects", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    try {
+      const payload = createProjectSchema.parse(request.body);
+      const created = orgProjectStore.createProject(payload);
+      reply.code(201);
+      return {
+        data: created,
+        meta: { request_id: request.id }
+      };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid project payload", error.issues);
+      }
+
+      throw error;
+    }
+  });
+
+  app.patch("/api/projects/:projectId", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    try {
+      const { projectId } = z.object({ projectId: z.string().min(1) }).parse(request.params);
+      const payload = updateProjectSchema.parse(request.body);
+      const updated = orgProjectStore.updateProject(projectId, payload);
+
+      if (!updated) {
+        reply.code(404);
+        return requestErrorEnvelope(request.id, "NOT_FOUND", `Project not found: ${projectId}`);
+      }
+
+      return {
+        data: updated,
+        meta: { request_id: request.id }
+      };
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid project payload", error.issues);
+      }
+
+      throw error;
+    }
+  });
+
   app.get("/api/policies", async (request, reply) => {
     reply.header("x-request-id", request.id);
     return {
@@ -284,6 +414,46 @@ export function buildApp(options: BuildAppOptions = {}) {
       if (error instanceof z.ZodError) {
         reply.code(400);
         return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid usage report request", error.issues);
+      }
+
+      throw error;
+    }
+  });
+
+  app.get("/api/infra/slo", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    try {
+      const query = sliDashboardQuerySchema.parse(request.query);
+      const aggregate = sliMetricsStore.aggregateWindow({
+        windowMinutes: query.window_minutes,
+        filters: {
+          service: query.service,
+          env: query.env,
+          route_group: query.route_group,
+          method: query.method
+        }
+      });
+
+      return sliDashboardResponseSchema.parse({
+        data: aggregate,
+        meta: { request_id: request.id }
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid SLO dashboard query", error.issues);
+      }
+
+      if (error instanceof Error && error.message.startsWith("unsupported")) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid SLO dashboard query", [
+          {
+            code: "custom",
+            message: error.message,
+            path: []
+          }
+        ]);
       }
 
       throw error;
