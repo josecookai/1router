@@ -3,6 +3,18 @@ set -euo pipefail
 
 ISSUE="${1:?issue number required}"
 ASSIGNEE="${2:-@me}"
+MILESTONE_ID="${3:-}"
+LANE="${4:-}"
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+if [[ -n "$MILESTONE_ID" || -n "$LANE" ]]; then
+  [[ -n "$MILESTONE_ID" && -n "$LANE" ]] || {
+    echo "usage: claim-issue.sh <issue> [assignee] [milestone-id lane]" >&2
+    exit 1
+  }
+  "$SCRIPT_DIR/check-branch-name.sh" "$LANE" "$MILESTONE_ID"
+fi
 
 gh issue edit "$ISSUE" --add-label "in_progress" --remove-label "ready" >/dev/null || true
 
