@@ -2,13 +2,11 @@
 set -euo pipefail
 
 PR="${1:?pr number required}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 gh pr checks "$PR" --required
 
-BODY="$(gh pr view "$PR" --json body --jq .body)"
-grep -q "Global coverage:" <<<"$BODY"
-grep -q "threshold \`>=85%\`" <<<"$BODY"
-grep -q "threshold \`>=80%\`" <<<"$BODY"
+"$SCRIPT_DIR/check-pr-template.sh" "$PR"
 
 STATE_JSON="$(gh pr view "$PR" --json mergeStateStatus,isDraft)"
 IS_DRAFT="$(jq -r '.isDraft' <<<"$STATE_JSON")"
