@@ -16,6 +16,18 @@ if [[ -n "$MILESTONE_ID" || -n "$LANE" ]]; then
   "$SCRIPT_DIR/check-branch-name.sh" "$LANE" "$MILESTONE_ID"
 fi
 
+LABELS="$(gh issue view "$ISSUE" --json labels --jq '.labels[].name' || true)"
+if grep -qx "ready" <<<"$LABELS"; then
+  "$SCRIPT_DIR/check-issue-transition.sh" ready in_progress
+elif grep -qx "blocked" <<<"$LABELS"; then
+  "$SCRIPT_DIR/check-issue-transition.sh" blocked in_progress
+elif grep -qx "in_progress" <<<"$LABELS"; then
+  echo "[issue-transition] INFO: issue already in_progress"
+else
+  echo "[issue-transition] FAIL: expected label ready|blocked|in_progress before claim" >&2
+  exit 1
+fi
+
 gh issue edit "$ISSUE" --add-label "in_progress" --remove-label "ready" >/dev/null || true
 
 if [[ "$ASSIGNEE" != "@me" ]]; then

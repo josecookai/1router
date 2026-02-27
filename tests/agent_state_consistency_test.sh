@@ -57,8 +57,21 @@ test_merge_script_removes_ready_label() {
   assert_contains "$out" "--remove-label \"ready\""
 }
 
+test_issue_transition_validator() {
+  local out
+  out="$(run_case 0 bash "$ROOT_DIR/scripts/agent/check-issue-transition.sh" ready in_progress)"
+  assert_contains "$out" "[issue-transition] PASS"
+
+  out="$(run_case 0 bash "$ROOT_DIR/scripts/agent/check-issue-transition.sh" in_progress done)"
+  assert_contains "$out" "[issue-transition] PASS"
+
+  out="$(run_case 1 bash "$ROOT_DIR/scripts/agent/check-issue-transition.sh" ready done)"
+  assert_contains "$out" "only ready -> in_progress is allowed"
+}
+
 test_branch_naming_validator
 test_blocked_helper_dry_run
 test_merge_script_removes_ready_label
+test_issue_transition_validator
 
 echo "[test] agent_state_consistency_test.sh PASS"
