@@ -1,12 +1,18 @@
 import { z } from "zod";
 import { buildDefaultProviderAdapterRegistry } from "./provider-adapters.js";
-import { selectRoutingCandidate, type RoutingPreset } from "./routing-presets.js";
+import {
+  selectRoutingCandidate,
+  type RoutingCandidateMetrics,
+  type RoutingPreset,
+  type RoutingRegion
+} from "./routing-presets.js";
 
 export const responsesRequestSchema = z
   .object({
     model: z.string().trim().min(1),
     input: z.string().trim().min(1),
     routing_preset: z.enum(["cost", "latency", "success", "balanced"]).optional(),
+    region_preference: z.enum(["US", "EU", "APAC"]).optional(),
     stream: z.literal(false).optional(),
     temperature: z.number().min(0).max(2).optional(),
     max_output_tokens: z.number().int().positive().optional()
@@ -47,7 +53,18 @@ export const responsesResponseSchema = z.object({
         score: z.number(),
         rank: z.number().int().positive()
       })
-    )
+    ),
+    region: z.object({
+      requested_region: z.enum(["US", "EU", "APAC"]).nullable(),
+      fallback_used: z.boolean(),
+      excluded_candidates: z.array(
+        z.object({
+          provider: z.string(),
+          provider_model: z.string(),
+          reason: z.literal("REGION_MISMATCH")
+        })
+      )
+    })
   })
 });
 
@@ -58,14 +75,29 @@ const defaultRegistry = buildDefaultProviderAdapterRegistry();
 export async function buildResponsesStubResponse(body: unknown, requestId: string): Promise<ResponsesResponse> {
   const parsed = responsesRequestSchema.parse(body);
   const preset: RoutingPreset = parsed.routing_preset ?? "balanced";
+  const regionPreference: RoutingRegion | undefined = parsed.region_preference;
+  const modelProvider = parsed.model.split("/", 1)[0] ?? "";
+  const singleModelRegions: Record<string, RoutingRegion[]> = {
+    openai: ["US", "EU"],
+    anthropic: ["US"],
+    google: ["APAC"]
+  };
 
-  const candidatePool =
+  const candidatePool: RoutingCandidateMetrics[] =
     parsed.model === "router/auto"
       ? [
-          { provider: "openai", provider_model: "openai/gpt-4.1-mini", cost_per_1k_usd: 0.6, latency_ms: 320, success_rate: 0.985 },
+          {
+            provider: "openai",
+            provider_model: "openai/gpt-4.1-mini",
+            regions: ["US", "EU"],
+            cost_per_1k_usd: 0.6,
+            latency_ms: 320,
+            success_rate: 0.985
+          },
           {
             provider: "anthropic",
             provider_model: "anthropic/claude-3-5-sonnet",
+            regions: ["US"],
             cost_per_1k_usd: 0.9,
             latency_ms: 410,
             success_rate: 0.994
@@ -73,6 +105,7 @@ export async function buildResponsesStubResponse(body: unknown, requestId: strin
           {
             provider: "google",
             provider_model: "google/gemini-2.0-flash",
+            regions: ["APAC"],
             cost_per_1k_usd: 0.4,
             latency_ms: 240,
             success_rate: 0.965
@@ -80,15 +113,16 @@ export async function buildResponsesStubResponse(body: unknown, requestId: strin
         ]
       : [
           {
-            provider: parsed.model.split("/", 1)[0] ?? "",
+            provider: modelProvider,
             provider_model: parsed.model,
+            regions: singleModelRegions[modelProvider] ?? ["US", "EU", "APAC"],
             cost_per_1k_usd: 0.5,
             latency_ms: 300,
             success_rate: 0.98
           }
         ];
 
-  const decision = selectRoutingCandidate(candidatePool, preset);
+  const decision = selectRoutingCandidate(candidatePool, preset, regionPreference);
   const adapter = defaultRegistry.resolveChatAdapter(decision.selected_provider_model);
 
   if (!adapter) {
@@ -130,7 +164,8 @@ export async function buildResponsesStubResponse(body: unknown, requestId: strin
         provider_model: candidate.provider_model,
         score: candidate.score,
         rank: candidate.rank
-      }))
+      })),
+      region: decision.region
     }
   });
 }

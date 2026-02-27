@@ -1,8 +1,10 @@
 export type RoutingPreset = "cost" | "latency" | "success" | "balanced";
+export type RoutingRegion = "US" | "EU" | "APAC";
 
 export type RoutingCandidateMetrics = {
   provider: string;
   provider_model: string;
+  regions: ReadonlyArray<RoutingRegion>;
   cost_per_1k_usd: number;
   latency_ms: number;
   success_rate: number;
@@ -62,8 +64,27 @@ export function scoreRoutingCandidates(candidates: RoutingCandidateMetrics[], pr
     .map((candidate, index) => ({ ...candidate, rank: index + 1 }));
 }
 
-export function selectRoutingCandidate(candidates: RoutingCandidateMetrics[], preset: RoutingPreset) {
-  const scored = scoreRoutingCandidates(candidates, preset);
+export function selectRoutingCandidate(
+  candidates: RoutingCandidateMetrics[],
+  preset: RoutingPreset,
+  regionPreference?: RoutingRegion
+) {
+  const regionCompliant = regionPreference
+    ? candidates.filter((candidate) => candidate.regions.includes(regionPreference))
+    : candidates;
+  const excludedByRegion = regionPreference
+    ? candidates
+        .filter((candidate) => !candidate.regions.includes(regionPreference))
+        .map((candidate) => ({
+          provider: candidate.provider,
+          provider_model: candidate.provider_model,
+          reason: "REGION_MISMATCH" as const
+        }))
+    : [];
+  const fallbackUsed = Boolean(regionPreference && regionCompliant.length === 0);
+  const effectiveCandidates = regionCompliant.length > 0 ? regionCompliant : candidates;
+
+  const scored = scoreRoutingCandidates(effectiveCandidates, preset);
   const selected = scored[0];
 
   if (!selected) {
@@ -74,6 +95,11 @@ export function selectRoutingCandidate(candidates: RoutingCandidateMetrics[], pr
     preset,
     selected_provider: selected.provider,
     selected_provider_model: selected.provider_model,
-    candidates: scored
+    candidates: scored,
+    region: {
+      requested_region: regionPreference ?? null,
+      fallback_used: fallbackUsed,
+      excluded_candidates: excludedByRegion
+    }
   };
 }
