@@ -107,6 +107,76 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/orgs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List organizations (MVP control-plane) */
+        get: operations["listOrgs"];
+        put?: never;
+        /** Create organization (MVP) */
+        post: operations["createOrg"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/orgs/{orgId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update organization (MVP) */
+        patch: operations["updateOrg"];
+        trace?: never;
+    };
+    "/api/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List projects (MVP control-plane) */
+        get: operations["listProjects"];
+        put?: never;
+        /** Create project (MVP) */
+        post: operations["createProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/projects/{projectId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update project (MVP) */
+        patch: operations["updateProject"];
+        trace?: never;
+    };
     "/api/models": {
         parameters: {
             query?: never;
@@ -347,6 +417,63 @@ export interface components {
         };
         CreateApiKeyResponse: {
             data: components["schemas"]["CreatedApiKey"];
+            meta: components["schemas"]["Meta"];
+        };
+        /** @enum {string} */
+        ResourceStatus: "active" | "inactive";
+        OrgRecord: {
+            id: string;
+            name: string;
+            status: components["schemas"]["ResourceStatus"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CreateOrgRequest: {
+            name: string;
+            /** @default active */
+            status: components["schemas"]["ResourceStatus"];
+        };
+        UpdateOrgRequest: {
+            name?: string;
+            status?: components["schemas"]["ResourceStatus"];
+        };
+        OrgsListResponse: {
+            data: components["schemas"]["OrgRecord"][];
+            meta: components["schemas"]["Meta"];
+        };
+        OrgRecordResponse: {
+            data: components["schemas"]["OrgRecord"];
+            meta: components["schemas"]["Meta"];
+        };
+        ProjectRecord: {
+            id: string;
+            org_id: string;
+            name: string;
+            status: components["schemas"]["ResourceStatus"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+        };
+        CreateProjectRequest: {
+            org_id: string;
+            name: string;
+            /** @default active */
+            status: components["schemas"]["ResourceStatus"];
+        };
+        UpdateProjectRequest: {
+            org_id?: string;
+            name?: string;
+            status?: components["schemas"]["ResourceStatus"];
+        };
+        ProjectsListResponse: {
+            data: components["schemas"]["ProjectRecord"][];
+            meta: components["schemas"]["Meta"];
+        };
+        ProjectRecordResponse: {
+            data: components["schemas"]["ProjectRecord"];
             meta: components["schemas"]["Meta"];
         };
         PolicyWeight: {
@@ -636,6 +763,71 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    /**
+                     * @example {
+                     *       "data": {
+                     *         "org_id": "org_demo",
+                     *         "from": "2026-02-26T10:00:00.000Z",
+                     *         "to": "2026-02-26T12:00:00.000Z",
+                     *         "group_by": "hour",
+                     *         "provisional": false,
+                     *         "finalized_at": "2026-02-26T12:00:00.000Z",
+                     *         "totals": {
+                     *           "bucket": "total",
+                     *           "requests": 28,
+                     *           "input_tokens": 4200,
+                     *           "output_tokens": 1600,
+                     *           "total_tokens": 5800,
+                     *           "cost_usd": 0.231,
+                     *           "platform_fee_usd": 0.0231,
+                     *           "provisional": true,
+                     *           "finalized_at": null
+                     *         },
+                     *         "summary": {
+                     *           "provisional": true,
+                     *           "finalized_at": null,
+                     *           "totals": {
+                     *             "bucket": "total",
+                     *             "requests": 28,
+                     *             "input_tokens": 4200,
+                     *             "output_tokens": 1600,
+                     *             "total_tokens": 5800,
+                     *             "cost_usd": 0.231,
+                     *             "platform_fee_usd": 0.0231,
+                     *             "provisional": true,
+                     *             "finalized_at": null
+                     *           }
+                     *         },
+                     *         "buckets": [
+                     *           {
+                     *             "bucket": "2026-02-26T10:00:00.000Z",
+                     *             "requests": 13,
+                     *             "input_tokens": 1900,
+                     *             "output_tokens": 700,
+                     *             "total_tokens": 2600,
+                     *             "cost_usd": 0.102,
+                     *             "platform_fee_usd": 0.0102,
+                     *             "provisional": true,
+                     *             "finalized_at": null
+                     *           },
+                     *           {
+                     *             "bucket": "2026-02-26T11:00:00.000Z",
+                     *             "requests": 15,
+                     *             "input_tokens": 2300,
+                     *             "output_tokens": 900,
+                     *             "total_tokens": 3200,
+                     *             "cost_usd": 0.129,
+                     *             "platform_fee_usd": 0.0129,
+                     *             "provisional": false,
+                     *             "finalized_at": "2026-02-26T12:00:00.000Z"
+                     *           }
+                     *         ]
+                     *       },
+                     *       "meta": {
+                     *         "request_id": "req_usage_001"
+                     *       }
+                     *     }
+                     */
                     "application/json": components["schemas"]["OrgUsageResponse"];
                 };
             };
@@ -723,6 +915,257 @@ export interface operations {
             };
             /** @description Invalid request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+        };
+    };
+    listOrgs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Organizations list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "org_01",
+                     *           "name": "Acme Inc",
+                     *           "status": "active",
+                     *           "created_at": "2026-01-01T00:00:00.000Z",
+                     *           "updated_at": "2026-01-01T00:00:00.000Z"
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "request_id": "req_orgs_001"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["OrgsListResponse"];
+                };
+            };
+        };
+    };
+    createOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "name": "Acme Inc",
+                 *       "status": "active"
+                 *     }
+                 */
+                "application/json": components["schemas"]["CreateOrgRequest"];
+            };
+        };
+        responses: {
+            /** @description Organization created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgRecordResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+        };
+    };
+    updateOrg: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                orgId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "status": "inactive"
+                 *     }
+                 */
+                "application/json": components["schemas"]["UpdateOrgRequest"];
+            };
+        };
+        responses: {
+            /** @description Organization updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrgRecordResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+            /** @description Organization not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+        };
+    };
+    listProjects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Projects list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "prj_01",
+                     *           "org_id": "org_01",
+                     *           "name": "Acme Default",
+                     *           "status": "active",
+                     *           "created_at": "2026-01-01T00:00:00.000Z",
+                     *           "updated_at": "2026-01-01T00:00:00.000Z"
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "request_id": "req_projects_001"
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["ProjectsListResponse"];
+                };
+            };
+        };
+    };
+    createProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "org_id": "org_01",
+                 *       "name": "Acme Default",
+                 *       "status": "active"
+                 *     }
+                 */
+                "application/json": components["schemas"]["CreateProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Project created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRecordResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+        };
+    };
+    updateProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "name": "Acme Default v2",
+                 *       "status": "inactive"
+                 *     }
+                 */
+                "application/json": components["schemas"]["UpdateProjectRequest"];
+            };
+        };
+        responses: {
+            /** @description Project updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectRecordResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+            /** @description Project not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

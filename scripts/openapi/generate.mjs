@@ -43,7 +43,7 @@ function responseTypeFor(pathKey) {
 }
 
 function generateMocksModule(spec) {
-  const endpoints = ["/v1/models", "/api/keys", "/api/policies"];
+  const endpoints = ["/api/models", "/api/orgs/{orgId}/usage", "/api/policies"];
   const exports = [];
 
   for (const endpoint of endpoints) {
@@ -54,10 +54,10 @@ function generateMocksModule(spec) {
     }
 
     const exportName =
-      endpoint === "/v1/models"
-        ? "modelsListMock"
-        : endpoint === "/api/keys"
-          ? "apiKeysListMock"
+      endpoint === "/api/models"
+        ? "controlPlaneModelsMock"
+        : endpoint === "/api/orgs/{orgId}/usage"
+          ? "orgUsageMock"
           : "apiPoliciesListMock";
 
     exports.push(

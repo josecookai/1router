@@ -178,6 +178,58 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OrgUsageResponse"
+              example:
+                data:
+                  org_id: org_demo
+                  from: "2026-02-26T10:00:00.000Z"
+                  to: "2026-02-26T12:00:00.000Z"
+                  group_by: hour
+                  provisional: false
+                  finalized_at: "2026-02-26T12:00:00.000Z"
+                  totals:
+                    bucket: total
+                    requests: 28
+                    input_tokens: 4200
+                    output_tokens: 1600
+                    total_tokens: 5800
+                    cost_usd: 0.231
+                    platform_fee_usd: 0.0231
+                    provisional: true
+                    finalized_at: null
+                  summary:
+                    provisional: true
+                    finalized_at: null
+                    totals:
+                      bucket: total
+                      requests: 28
+                      input_tokens: 4200
+                      output_tokens: 1600
+                      total_tokens: 5800
+                      cost_usd: 0.231
+                      platform_fee_usd: 0.0231
+                      provisional: true
+                      finalized_at: null
+                  buckets:
+                    - bucket: "2026-02-26T10:00:00.000Z"
+                      requests: 13
+                      input_tokens: 1900
+                      output_tokens: 700
+                      total_tokens: 2600
+                      cost_usd: 0.102
+                      platform_fee_usd: 0.0102
+                      provisional: true
+                      finalized_at: null
+                    - bucket: "2026-02-26T11:00:00.000Z"
+                      requests: 15
+                      input_tokens: 2300
+                      output_tokens: 900
+                      total_tokens: 3200
+                      cost_usd: 0.129
+                      platform_fee_usd: 0.0129
+                      provisional: false
+                      finalized_at: "2026-02-26T12:00:00.000Z"
+                meta:
+                  request_id: req_usage_001
         "400":
           description: Invalid request
           content:
@@ -234,6 +286,173 @@ paths:
                     status: inactive
                 meta:
                   request_id: req_keys_001
+  /api/orgs:
+    get:
+      summary: List organizations (MVP control-plane)
+      operationId: listOrgs
+      responses:
+        "200":
+          description: Organizations list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgsListResponse"
+              example:
+                data:
+                  - id: org_01
+                    name: Acme Inc
+                    status: active
+                    created_at: "2026-01-01T00:00:00.000Z"
+                    updated_at: "2026-01-01T00:00:00.000Z"
+                meta:
+                  request_id: req_orgs_001
+    post:
+      summary: Create organization (MVP)
+      operationId: createOrg
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrgRequest"
+            example:
+              name: Acme Inc
+              status: active
+      responses:
+        "201":
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgRecordResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingsError"
+  /api/orgs/{orgId}:
+    patch:
+      summary: Update organization (MVP)
+      operationId: updateOrg
+      parameters:
+        - in: path
+          name: orgId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateOrgRequest"
+            example:
+              status: inactive
+      responses:
+        "200":
+          description: Organization updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgRecordResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingsError"
+        "404":
+          description: Organization not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingsError"
+  /api/projects:
+    get:
+      summary: List projects (MVP control-plane)
+      operationId: listProjects
+      responses:
+        "200":
+          description: Projects list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectsListResponse"
+              example:
+                data:
+                  - id: prj_01
+                    org_id: org_01
+                    name: Acme Default
+                    status: active
+                    created_at: "2026-01-01T00:00:00.000Z"
+                    updated_at: "2026-01-01T00:00:00.000Z"
+                meta:
+                  request_id: req_projects_001
+    post:
+      summary: Create project (MVP)
+      operationId: createProject
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectRequest"
+            example:
+              org_id: org_01
+              name: Acme Default
+              status: active
+      responses:
+        "201":
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectRecordResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingsError"
+  /api/projects/{projectId}:
+    patch:
+      summary: Update project (MVP)
+      operationId: updateProject
+      parameters:
+        - in: path
+          name: projectId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectRequest"
+            example:
+              name: Acme Default v2
+              status: inactive
+      responses:
+        "200":
+          description: Project updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectRecordResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingsError"
+        "404":
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingsError"
   /api/models:
     get:
       summary: List control-plane models for policy UI
@@ -796,6 +1015,136 @@ components:
       properties:
         data:
           $ref: "#/components/schemas/CreatedApiKey"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    ResourceStatus:
+      type: string
+      enum: [active, inactive]
+    OrgRecord:
+      type: object
+      additionalProperties: false
+      required: [id, name, status, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          minLength: 1
+        status:
+          $ref: "#/components/schemas/ResourceStatus"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateOrgRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        status:
+          $ref: "#/components/schemas/ResourceStatus"
+          default: active
+    UpdateOrgRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+        status:
+          $ref: "#/components/schemas/ResourceStatus"
+    OrgsListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/OrgRecord"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    OrgRecordResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/OrgRecord"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    ProjectRecord:
+      type: object
+      additionalProperties: false
+      required: [id, org_id, name, status, created_at, updated_at]
+      properties:
+        id:
+          type: string
+        org_id:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        status:
+          $ref: "#/components/schemas/ResourceStatus"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateProjectRequest:
+      type: object
+      additionalProperties: false
+      required: [org_id, name]
+      properties:
+        org_id:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        status:
+          $ref: "#/components/schemas/ResourceStatus"
+          default: active
+    UpdateProjectRequest:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        org_id:
+          type: string
+          minLength: 1
+        name:
+          type: string
+          minLength: 1
+        status:
+          $ref: "#/components/schemas/ResourceStatus"
+    ProjectsListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProjectRecord"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    ProjectRecordResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/ProjectRecord"
         meta:
           $ref: "#/components/schemas/Meta"
     PolicyWeight:
