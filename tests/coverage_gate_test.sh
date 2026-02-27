@@ -48,6 +48,7 @@ test_env_values_pass() {
   out="$(run_case env-pass 0 env -i PATH="$PATH" HOME="${HOME:-/tmp}" COVERAGE_DISABLE_NPM=1 GLOBAL_COVERAGE=91.2 KEY_MODULE_COVERAGE=80 bash "$COVERAGE_SCRIPT")"
   assert_contains "$out" "Global coverage: 91.2%"
   assert_contains "$out" "Key module coverage: 80%"
+  assert_contains "$out" "Summary: global=91.2 key_module=80"
 }
 
 test_threshold_failure_fails() {
