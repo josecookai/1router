@@ -72,6 +72,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/responses/{responseId}/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get route decision trace for a response */
+        get: operations["getResponseTrace"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/orgs/{orgId}/usage": {
         parameters: {
             query?: never;
@@ -373,6 +390,33 @@ export interface components {
             output: components["schemas"]["ResponsesOutputMessage"][];
             usage: components["schemas"]["ResponsesUsage"];
             router: components["schemas"]["ResponsesRouterMeta"];
+        };
+        ResponseDecisionTraceCandidate: {
+            provider: string;
+            provider_model: string;
+            regions: ("US" | "EU" | "APAC")[];
+            cost_per_1k_usd: number;
+            latency_ms: number;
+            success_rate: number;
+            included: boolean;
+            score: number | null;
+            rank: number | null;
+            /** @enum {string|null} */
+            exclusion_reason: "REGION_MISMATCH" | null;
+        };
+        ResponseDecisionTrace: {
+            response_id: string;
+            request_id: string;
+            selected_provider: string;
+            selected_provider_model: string;
+            /** @enum {string} */
+            preset: "cost" | "latency" | "success" | "balanced";
+            weights: {
+                cost: number;
+                latency: number;
+                success: number;
+            };
+            candidates: components["schemas"]["ResponseDecisionTraceCandidate"][];
         };
         UsageBucket: {
             bucket: string;
@@ -756,6 +800,37 @@ export interface operations {
             };
             /** @description Idempotency key conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+        };
+    };
+    getResponseTrace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                responseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Route decision trace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseDecisionTrace"];
+                };
+            };
+            /** @description Trace not found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

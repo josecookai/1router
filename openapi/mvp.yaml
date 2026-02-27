@@ -143,6 +143,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EmbeddingsError"
+  /v1/responses/{responseId}/trace:
+    get:
+      summary: Get route decision trace for a response
+      operationId: getResponseTrace
+      parameters:
+        - in: path
+          name: responseId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Route decision trace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ResponseDecisionTrace"
+        "404":
+          description: Trace not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingsError"
   /api/orgs/{orgId}/usage:
     get:
       summary: Read aggregated usage for an org
@@ -915,6 +938,72 @@ components:
           $ref: "#/components/schemas/ResponsesUsage"
         router:
           $ref: "#/components/schemas/ResponsesRouterMeta"
+    ResponseDecisionTraceCandidate:
+      type: object
+      additionalProperties: false
+      required:
+        [provider, provider_model, regions, cost_per_1k_usd, latency_ms, success_rate, included, score, rank, exclusion_reason]
+      properties:
+        provider:
+          type: string
+        provider_model:
+          type: string
+        regions:
+          type: array
+          items:
+            type: string
+            enum: [US, EU, APAC]
+        cost_per_1k_usd:
+          type: number
+        latency_ms:
+          type: number
+        success_rate:
+          type: number
+        included:
+          type: boolean
+        score:
+          type: number
+          nullable: true
+        rank:
+          type: integer
+          nullable: true
+          minimum: 1
+        exclusion_reason:
+          type: string
+          enum: [REGION_MISMATCH]
+          nullable: true
+    ResponseDecisionTrace:
+      type: object
+      additionalProperties: false
+      required: [response_id, request_id, selected_provider, selected_provider_model, preset, weights, candidates]
+      properties:
+        response_id:
+          type: string
+        request_id:
+          type: string
+        selected_provider:
+          type: string
+        selected_provider_model:
+          type: string
+        preset:
+          type: string
+          enum: [cost, latency, success, balanced]
+        weights:
+          type: object
+          additionalProperties: false
+          required: [cost, latency, success]
+          properties:
+            cost:
+              type: number
+            latency:
+              type: number
+            success:
+              type: number
+        candidates:
+          type: array
+          minItems: 1
+          items:
+            $ref: "#/components/schemas/ResponseDecisionTraceCandidate"
     UsageBucket:
       type: object
       additionalProperties: false

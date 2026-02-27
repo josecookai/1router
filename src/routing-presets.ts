@@ -22,6 +22,10 @@ const PRESET_WEIGHTS: Record<RoutingPreset, { cost: number; latency: number; suc
   balanced: { cost: 0.34, latency: 0.33, success: 0.33 }
 };
 
+export function getRoutingPresetWeights(preset: RoutingPreset) {
+  return PRESET_WEIGHTS[preset];
+}
+
 function normalizeAscending(value: number, min: number, max: number) {
   if (max === min) return 1;
   return 1 - (value - min) / (max - min);
@@ -37,7 +41,7 @@ function roundScore(value: number) {
 }
 
 export function scoreRoutingCandidates(candidates: RoutingCandidateMetrics[], preset: RoutingPreset): ScoredRoutingCandidate[] {
-  const weights = PRESET_WEIGHTS[preset];
+  const weights = getRoutingPresetWeights(preset);
   const costs = candidates.map((c) => c.cost_per_1k_usd);
   const latencies = candidates.map((c) => c.latency_ms);
   const successes = candidates.map((c) => c.success_rate);

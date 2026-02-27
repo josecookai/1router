@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { buildDefaultProviderAdapterRegistry } from "./provider-adapters.js";
 import {
+  getRoutingPresetWeights,
   selectRoutingCandidate,
   type RoutingCandidateMetrics,
   type RoutingPreset,
@@ -69,10 +70,38 @@ export const responsesResponseSchema = z.object({
 });
 
 export type ResponsesResponse = z.infer<typeof responsesResponseSchema>;
+export const responseDecisionTraceSchema = z.object({
+  response_id: z.string(),
+  request_id: z.string(),
+  selected_provider: z.string(),
+  selected_provider_model: z.string(),
+  preset: z.enum(["cost", "latency", "success", "balanced"]),
+  weights: z.object({
+    cost: z.number(),
+    latency: z.number(),
+    success: z.number()
+  }),
+  candidates: z.array(
+    z.object({
+      provider: z.string(),
+      provider_model: z.string(),
+      regions: z.array(z.enum(["US", "EU", "APAC"])),
+      cost_per_1k_usd: z.number(),
+      latency_ms: z.number(),
+      success_rate: z.number(),
+      included: z.boolean(),
+      score: z.number().nullable(),
+      rank: z.number().int().positive().nullable(),
+      exclusion_reason: z.literal("REGION_MISMATCH").nullable()
+    })
+  )
+});
+export type ResponseDecisionTrace = z.infer<typeof responseDecisionTraceSchema>;
+export type ResponsesBuildResult = { response: ResponsesResponse; trace: ResponseDecisionTrace };
 
 const defaultRegistry = buildDefaultProviderAdapterRegistry();
 
-export async function buildResponsesStubResponse(body: unknown, requestId: string): Promise<ResponsesResponse> {
+export async function buildResponsesStubResult(body: unknown, requestId: string): Promise<ResponsesBuildResult> {
   const parsed = responsesRequestSchema.parse(body);
   const preset: RoutingPreset = parsed.routing_preset ?? "balanced";
   const regionPreference: RoutingRegion | undefined = parsed.region_preference;
@@ -137,7 +166,7 @@ export async function buildResponsesStubResponse(body: unknown, requestId: strin
     max_tokens: parsed.max_output_tokens
   });
 
-  return responsesResponseSchema.parse({
+  const response = responsesResponseSchema.parse({
     id: `resp_${requestId.replace(/[^a-zA-Z0-9_-]/g, "")}`,
     object: "response",
     created: Math.floor(Date.now() / 1000),
@@ -168,4 +197,45 @@ export async function buildResponsesStubResponse(body: unknown, requestId: strin
       region: decision.region
     }
   });
+
+  const scoreKey = (provider: string, providerModel: string) => `${provider}::${providerModel}`;
+  const scoredMap = new Map(
+    decision.candidates.map((candidate) => [scoreKey(candidate.provider, candidate.provider_model), candidate] as const)
+  );
+  const excludedSet = new Set(
+    decision.region.excluded_candidates.map((candidate) => scoreKey(candidate.provider, candidate.provider_model))
+  );
+
+  const trace = responseDecisionTraceSchema.parse({
+    response_id: response.id,
+    request_id: requestId,
+    selected_provider: decision.selected_provider,
+    selected_provider_model: decision.selected_provider_model,
+    preset,
+    weights: getRoutingPresetWeights(preset),
+    candidates: candidatePool.map((candidate) => {
+      const key = scoreKey(candidate.provider, candidate.provider_model);
+      const scored = scoredMap.get(key);
+      const excluded = excludedSet.has(key);
+      return {
+        provider: candidate.provider,
+        provider_model: candidate.provider_model,
+        regions: [...candidate.regions],
+        cost_per_1k_usd: candidate.cost_per_1k_usd,
+        latency_ms: candidate.latency_ms,
+        success_rate: candidate.success_rate,
+        included: !excluded,
+        score: scored?.score ?? null,
+        rank: scored?.rank ?? null,
+        exclusion_reason: excluded ? "REGION_MISMATCH" : null
+      };
+    })
+  });
+
+  return { response, trace };
+}
+
+export async function buildResponsesStubResponse(body: unknown, requestId: string): Promise<ResponsesResponse> {
+  const result = await buildResponsesStubResult(body, requestId);
+  return result.response;
 }

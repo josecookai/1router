@@ -214,4 +214,68 @@ describe("POST /v1/responses", () => {
     expect(parsed.router.candidates[0]?.provider).toBe("anthropic");
     expect(parsed.router.region.excluded_candidates[0]?.reason).toBe("REGION_MISMATCH");
   });
+
+  it("returns route decision trace with weights and filtered candidates", async () => {
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/v1/responses",
+      payload: {
+        model: "router/auto",
+        input: "trace me",
+        routing_preset: "cost",
+        region_preference: "EU"
+      },
+      headers: { authorization: `Bearer ${plaintext}` }
+    });
+    const responsePayload = responsesResponseSchema.parse(createRes.json());
+
+    const traceRes = await app.inject({
+      method: "GET",
+      url: `/v1/responses/${responsePayload.id}/trace`,
+      headers: { authorization: `Bearer ${plaintext}` }
+    });
+
+    expect(traceRes.statusCode).toBe(200);
+    expect(traceRes.headers["x-request-id"]).toBeTruthy();
+    expect(traceRes.json()).toMatchObject({
+      response_id: responsePayload.id,
+      request_id: responsePayload.router.request_id,
+      preset: "cost",
+      selected_provider: "openai",
+      weights: { cost: 0.7, latency: 0.15, success: 0.15 }
+    });
+    const tracePayload = traceRes.json() as {
+      candidates: Array<{ provider: string; included: boolean; exclusion_reason: string | null }>;
+    };
+    const openaiCandidate = tracePayload.candidates.find((candidate) => candidate.provider === "openai");
+    const anthropicCandidate = tracePayload.candidates.find((candidate) => candidate.provider === "anthropic");
+    expect(openaiCandidate?.included).toBe(true);
+    expect(anthropicCandidate?.included).toBe(false);
+    expect(anthropicCandidate?.exclusion_reason).toBe("REGION_MISMATCH");
+  });
+
+  it("never exposes secrets in trace payload", async () => {
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/v1/responses",
+      payload: {
+        model: "router/auto",
+        input: "no secret leak"
+      },
+      headers: { authorization: `Bearer ${plaintext}` }
+    });
+    const responsePayload = responsesResponseSchema.parse(createRes.json());
+
+    const traceRes = await app.inject({
+      method: "GET",
+      url: `/v1/responses/${responsePayload.id}/trace`,
+      headers: { authorization: `Bearer ${plaintext}` }
+    });
+
+    const serialized = JSON.stringify(traceRes.json()).toLowerCase();
+    expect(serialized).not.toContain(plaintext.toLowerCase());
+    expect(serialized).not.toContain("authorization");
+    expect(serialized).not.toContain("api_key");
+    expect(serialized).not.toContain("secret");
+  });
 });

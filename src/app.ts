@@ -18,7 +18,8 @@ import {
   updateProjectSchema
 } from "./org-projects.js";
 import { InMemoryPolicyStore, type PolicyRepository, createPolicySchema } from "./policies.js";
-import { buildResponsesStubResponse, type ResponsesResponse } from "./responses.js";
+import { InMemoryResponseTraceStore } from "./response-traces.js";
+import { buildResponsesStubResult, type ResponsesResponse } from "./responses.js";
 import {
   InMemorySliMetricsStore,
   sliDashboardQuerySchema,
@@ -66,6 +67,7 @@ type BuildAppOptions = {
   orgProjectStore?: OrgProjectRepository;
   usageRepo?: FixtureUsageRepository;
   responsesIdempotencyStore?: InMemoryIdempotencyStore<ResponsesResponse>;
+  responseTraceStore?: InMemoryResponseTraceStore;
   sliMetricsStore?: InMemorySliMetricsStore;
   registerRoutes?: (app: FastifyInstance) => void;
 };
@@ -90,6 +92,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   const orgProjectStore = options.orgProjectStore ?? new InMemoryOrgProjectStore();
   const usageRepo = options.usageRepo ?? new FixtureUsageRepository();
   const responsesIdempotencyStore = options.responsesIdempotencyStore ?? new InMemoryIdempotencyStore<ResponsesResponse>();
+  const responseTraceStore = options.responseTraceStore ?? new InMemoryResponseTraceStore();
   const sliMetricsStore = options.sliMetricsStore ?? new InMemorySliMetricsStore();
   const publicDir = path.resolve(process.cwd(), "public");
   (app as FastifyInstance & { sliMetricsStore?: InMemorySliMetricsStore }).sliMetricsStore = sliMetricsStore;
@@ -198,7 +201,7 @@ export function buildApp(options: BuildAppOptions = {}) {
         }
       }
 
-      const response = await buildResponsesStubResponse(request.body, request.id);
+      const { response, trace } = await buildResponsesStubResult(request.body, request.id);
       if (idempotencyKey && fingerprint) {
         responsesIdempotencyStore.set({
           key: idempotencyKey,
@@ -206,6 +209,7 @@ export function buildApp(options: BuildAppOptions = {}) {
           response
         });
       }
+      responseTraceStore.set(trace);
 
       return response;
     } catch (error) {
@@ -221,6 +225,17 @@ export function buildApp(options: BuildAppOptions = {}) {
         error instanceof Error ? error.message : "Unsupported responses model"
       );
     }
+  });
+
+  app.get("/v1/responses/:responseId/trace", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+    const { responseId } = z.object({ responseId: z.string().trim().min(1) }).parse(request.params);
+    const trace = responseTraceStore.get(responseId);
+    if (!trace) {
+      reply.code(404);
+      return requestErrorEnvelope(request.id, "NOT_FOUND", `Response trace not found: ${responseId}`);
+    }
+    return trace;
   });
 
   app.get("/api/keys", async (request, reply) => {
