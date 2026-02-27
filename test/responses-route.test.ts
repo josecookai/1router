@@ -58,4 +58,25 @@ describe("POST /v1/responses", () => {
       }
     });
   });
+
+  it("returns shared error envelope for unsupported model", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/responses",
+      payload: {
+        model: "anthropic/claude-3-5-sonnet",
+        input: "hello"
+      },
+      headers: { authorization: `Bearer ${plaintext}` }
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.headers["x-request-id"]).toBeTruthy();
+    expect(res.json()).toMatchObject({
+      error: {
+        code: "UNSUPPORTED_MODEL",
+        request_id: res.headers["x-request-id"]
+      }
+    });
+  });
 });
