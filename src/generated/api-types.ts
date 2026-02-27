@@ -188,7 +188,7 @@ export interface components {
         EmbeddingsError: {
             error: {
                 /** @enum {string} */
-                code: "INVALID_REQUEST" | "UNSUPPORTED_MODEL";
+                code: "INVALID_REQUEST" | "UNSUPPORTED_MODEL" | "IDEMPOTENCY_KEY_CONFLICT";
                 message: string;
                 request_id: string;
             } & {
@@ -567,7 +567,9 @@ export interface operations {
     createResponse: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -595,6 +597,15 @@ export interface operations {
             };
             /** @description Invalid request or unsupported model */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+            /** @description Idempotency key conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

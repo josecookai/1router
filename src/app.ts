@@ -7,9 +7,10 @@ import { ApiKeyStoreRouterAuthRepository, authenticateRouterKey } from "./auth.j
 import { buildChatCompletionsStubResponse } from "./chat-completions.js";
 import { buildEmbeddingsStubResponse } from "./embeddings.js";
 import { loggerRedactPaths, registerInfraBaseline } from "./infra.js";
+import { InMemoryIdempotencyStore, buildPayloadFingerprint } from "./idempotency.js";
 import { buildModelsListResponse } from "./models-catalog.js";
 import { InMemoryPolicyStore, type PolicyRepository, createPolicySchema } from "./policies.js";
-import { buildResponsesStubResponse } from "./responses.js";
+import { buildResponsesStubResponse, type ResponsesResponse } from "./responses.js";
 import { FixtureUsageRepository, buildUsageReportResponse } from "./usage-report.js";
 
 const healthzResponseSchema = z.object({
@@ -50,6 +51,7 @@ type BuildAppOptions = {
   apiKeyStore?: InMemoryApiKeyStore;
   policyStore?: PolicyRepository;
   usageRepo?: FixtureUsageRepository;
+  responsesIdempotencyStore?: InMemoryIdempotencyStore<ResponsesResponse>;
   registerRoutes?: (app: FastifyInstance) => void;
 };
 
@@ -71,6 +73,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   const authRepo = new ApiKeyStoreRouterAuthRepository(apiKeyStore);
   const policyStore = options.policyStore ?? new InMemoryPolicyStore();
   const usageRepo = options.usageRepo ?? new FixtureUsageRepository();
+  const responsesIdempotencyStore = options.responsesIdempotencyStore ?? new InMemoryIdempotencyStore<ResponsesResponse>();
   const publicDir = path.resolve(process.cwd(), "public");
 
   app.get("/", async (_request, reply) => {
@@ -156,7 +159,37 @@ export function buildApp(options: BuildAppOptions = {}) {
     reply.header("x-request-id", request.id);
 
     try {
-      return await buildResponsesStubResponse(request.body, request.id);
+      const idempotencyKeyHeader = request.headers["idempotency-key"];
+      const idempotencyKey = typeof idempotencyKeyHeader === "string" ? idempotencyKeyHeader.trim() : "";
+      const fingerprint = idempotencyKey ? buildPayloadFingerprint(request.body) : null;
+
+      if (idempotencyKey && fingerprint) {
+        const existing = responsesIdempotencyStore.get(idempotencyKey);
+        if (existing) {
+          if (existing.fingerprint !== fingerprint) {
+            reply.code(409);
+            return requestErrorEnvelope(
+              request.id,
+              "IDEMPOTENCY_KEY_CONFLICT",
+              "Idempotency-Key already used with different payload"
+            );
+          }
+
+          reply.header("x-idempotent-replay", "true");
+          return existing.response;
+        }
+      }
+
+      const response = await buildResponsesStubResponse(request.body, request.id);
+      if (idempotencyKey && fingerprint) {
+        responsesIdempotencyStore.set({
+          key: idempotencyKey,
+          fingerprint,
+          response
+        });
+      }
+
+      return response;
     } catch (error) {
       if (error instanceof z.ZodError) {
         reply.code(400);

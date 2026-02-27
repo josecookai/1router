@@ -79,4 +79,73 @@ describe("POST /v1/responses", () => {
       }
     });
   });
+
+  it("replays same logical response for same idempotency key and payload", async () => {
+    const payload = {
+      model: "openai/gpt-4.1-mini",
+      input: "Say hi",
+      stream: false as const
+    };
+
+    const first = await app.inject({
+      method: "POST",
+      url: "/v1/responses",
+      payload,
+      headers: {
+        authorization: `Bearer ${plaintext}`,
+        "idempotency-key": "idem_001"
+      }
+    });
+    const replay = await app.inject({
+      method: "POST",
+      url: "/v1/responses",
+      payload,
+      headers: {
+        authorization: `Bearer ${plaintext}`,
+        "idempotency-key": "idem_001"
+      }
+    });
+
+    expect(first.statusCode).toBe(200);
+    expect(replay.statusCode).toBe(200);
+    expect(replay.headers["x-idempotent-replay"]).toBe("true");
+    expect(replay.json()).toEqual(first.json());
+  });
+
+  it("returns conflict for same idempotency key with different payload", async () => {
+    const first = await app.inject({
+      method: "POST",
+      url: "/v1/responses",
+      payload: {
+        model: "openai/gpt-4.1-mini",
+        input: "First request"
+      },
+      headers: {
+        authorization: `Bearer ${plaintext}`,
+        "idempotency-key": "idem_002"
+      }
+    });
+    const conflict = await app.inject({
+      method: "POST",
+      url: "/v1/responses",
+      payload: {
+        model: "openai/gpt-4.1-mini",
+        input: "Changed request"
+      },
+      headers: {
+        authorization: `Bearer ${plaintext}`,
+        "idempotency-key": "idem_002"
+      }
+    });
+
+    expect(first.statusCode).toBe(200);
+    expect(conflict.statusCode).toBe(409);
+    expect(conflict.headers["x-request-id"]).toBeTruthy();
+    expect(conflict.json()).toMatchObject({
+      error: {
+        code: "IDEMPOTENCY_KEY_CONFLICT",
+        request_id: conflict.headers["x-request-id"]
+      }
+    });
+  });
 });
