@@ -143,6 +143,33 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EmbeddingsError"
+  /v1/routing/decision/explain:
+    post:
+      summary: Explain routing decision factors (non-streaming)
+      operationId: explainRoutingDecision
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoutingExplainRequest"
+            example:
+              model: router/auto
+              routing_preset: success
+              region_preference: EU
+      responses:
+        "200":
+          description: Routing decision trace
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RoutingExplainResponse"
+        "400":
+          description: Invalid request or unsupported model
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingsError"
   /api/orgs/{orgId}/usage:
     get:
       summary: Read aggregated usage for an org
@@ -968,6 +995,107 @@ components:
           $ref: "#/components/schemas/ResponsesUsage"
         router:
           $ref: "#/components/schemas/ResponsesRouterMeta"
+    RoutingExplainRequest:
+      type: object
+      additionalProperties: false
+      required: [model]
+      properties:
+        model:
+          type: string
+          minLength: 1
+        routing_preset:
+          type: string
+          enum: [cost, latency, success, balanced]
+        region_preference:
+          type: string
+          enum: [US, EU, APAC]
+    RoutingExplainResponse:
+      type: object
+      additionalProperties: false
+      required: [request_id, model, preset, weights, selected, region, candidates]
+      properties:
+        request_id:
+          type: string
+        model:
+          type: string
+        preset:
+          type: string
+          enum: [cost, latency, success, balanced]
+        weights:
+          type: object
+          additionalProperties: false
+          required: [cost, latency, success]
+          properties:
+            cost:
+              type: number
+            latency:
+              type: number
+            success:
+              type: number
+        selected:
+          type: object
+          additionalProperties: false
+          required: [provider, provider_model]
+          properties:
+            provider:
+              type: string
+            provider_model:
+              type: string
+        region:
+          type: object
+          additionalProperties: false
+          required: [requested_region, fallback_used, excluded_candidates]
+          properties:
+            requested_region:
+              type: string
+              enum: [US, EU, APAC]
+              nullable: true
+            fallback_used:
+              type: boolean
+            excluded_candidates:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [provider, provider_model, reason]
+                properties:
+                  provider:
+                    type: string
+                  provider_model:
+                    type: string
+                  reason:
+                    type: string
+                    enum: [REGION_MISMATCH]
+        candidates:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required:
+              [provider, provider_model, regions, cost_per_1k_usd, latency_ms, success_rate, score, rank]
+            properties:
+              provider:
+                type: string
+              provider_model:
+                type: string
+              regions:
+                type: array
+                minItems: 1
+                items:
+                  type: string
+                  enum: [US, EU, APAC]
+              cost_per_1k_usd:
+                type: number
+              latency_ms:
+                type: number
+              success_rate:
+                type: number
+              score:
+                type: number
+              rank:
+                type: integer
+                minimum: 1
     UsageBucket:
       type: object
       additionalProperties: false

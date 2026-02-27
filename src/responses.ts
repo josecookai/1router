@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { buildDefaultProviderAdapterRegistry } from "./provider-adapters.js";
 import {
+  getRoutingPresetWeights,
   selectRoutingCandidate,
   type RoutingCandidateMetrics,
   type RoutingPreset,
@@ -70,57 +71,110 @@ export const responsesResponseSchema = z.object({
 
 export type ResponsesResponse = z.infer<typeof responsesResponseSchema>;
 
+export const routingExplainRequestSchema = z
+  .object({
+    model: z.string().trim().min(1),
+    routing_preset: z.enum(["cost", "latency", "success", "balanced"]).optional(),
+    region_preference: z.enum(["US", "EU", "APAC"]).optional()
+  })
+  .strict();
+
+export const routingExplainResponseSchema = z.object({
+  request_id: z.string(),
+  model: z.string(),
+  preset: z.enum(["cost", "latency", "success", "balanced"]),
+  weights: z.object({
+    cost: z.number(),
+    latency: z.number(),
+    success: z.number()
+  }),
+  selected: z.object({
+    provider: z.string(),
+    provider_model: z.string()
+  }),
+  region: z.object({
+    requested_region: z.enum(["US", "EU", "APAC"]).nullable(),
+    fallback_used: z.boolean(),
+    excluded_candidates: z.array(
+      z.object({
+        provider: z.string(),
+        provider_model: z.string(),
+        reason: z.literal("REGION_MISMATCH")
+      })
+    )
+  }),
+  candidates: z.array(
+    z.object({
+      provider: z.string(),
+      provider_model: z.string(),
+      regions: z.array(z.enum(["US", "EU", "APAC"])),
+      cost_per_1k_usd: z.number(),
+      latency_ms: z.number(),
+      success_rate: z.number(),
+      score: z.number(),
+      rank: z.number().int().positive()
+    })
+  )
+});
+
+export type RoutingExplainResponse = z.infer<typeof routingExplainResponseSchema>;
+
 const defaultRegistry = buildDefaultProviderAdapterRegistry();
 
-export async function buildResponsesStubResponse(body: unknown, requestId: string): Promise<ResponsesResponse> {
-  const parsed = responsesRequestSchema.parse(body);
-  const preset: RoutingPreset = parsed.routing_preset ?? "balanced";
-  const regionPreference: RoutingRegion | undefined = parsed.region_preference;
-  const modelProvider = parsed.model.split("/", 1)[0] ?? "";
+function buildCandidatePool(model: string): RoutingCandidateMetrics[] {
+  const modelProvider = model.split("/", 1)[0] ?? "";
   const singleModelRegions: Record<string, RoutingRegion[]> = {
     openai: ["US", "EU"],
     anthropic: ["US"],
     google: ["APAC"]
   };
 
-  const candidatePool: RoutingCandidateMetrics[] =
-    parsed.model === "router/auto"
-      ? [
-          {
-            provider: "openai",
-            provider_model: "openai/gpt-4.1-mini",
-            regions: ["US", "EU"],
-            cost_per_1k_usd: 0.6,
-            latency_ms: 320,
-            success_rate: 0.985
-          },
-          {
-            provider: "anthropic",
-            provider_model: "anthropic/claude-3-5-sonnet",
-            regions: ["US"],
-            cost_per_1k_usd: 0.9,
-            latency_ms: 410,
-            success_rate: 0.994
-          },
-          {
-            provider: "google",
-            provider_model: "google/gemini-2.0-flash",
-            regions: ["APAC"],
-            cost_per_1k_usd: 0.4,
-            latency_ms: 240,
-            success_rate: 0.965
-          }
-        ]
-      : [
-          {
-            provider: modelProvider,
-            provider_model: parsed.model,
-            regions: singleModelRegions[modelProvider] ?? ["US", "EU", "APAC"],
-            cost_per_1k_usd: 0.5,
-            latency_ms: 300,
-            success_rate: 0.98
-          }
-        ];
+  if (model === "router/auto") {
+    return [
+      {
+        provider: "openai",
+        provider_model: "openai/gpt-4.1-mini",
+        regions: ["US", "EU"],
+        cost_per_1k_usd: 0.6,
+        latency_ms: 320,
+        success_rate: 0.985
+      },
+      {
+        provider: "anthropic",
+        provider_model: "anthropic/claude-3-5-sonnet",
+        regions: ["US"],
+        cost_per_1k_usd: 0.9,
+        latency_ms: 410,
+        success_rate: 0.994
+      },
+      {
+        provider: "google",
+        provider_model: "google/gemini-2.0-flash",
+        regions: ["APAC"],
+        cost_per_1k_usd: 0.4,
+        latency_ms: 240,
+        success_rate: 0.965
+      }
+    ];
+  }
+
+  return [
+    {
+      provider: modelProvider,
+      provider_model: model,
+      regions: singleModelRegions[modelProvider] ?? ["US", "EU", "APAC"],
+      cost_per_1k_usd: 0.5,
+      latency_ms: 300,
+      success_rate: 0.98
+    }
+  ];
+}
+
+export async function buildResponsesStubResponse(body: unknown, requestId: string): Promise<ResponsesResponse> {
+  const parsed = responsesRequestSchema.parse(body);
+  const preset: RoutingPreset = parsed.routing_preset ?? "balanced";
+  const regionPreference: RoutingRegion | undefined = parsed.region_preference;
+  const candidatePool = buildCandidatePool(parsed.model);
 
   const decision = selectRoutingCandidate(candidatePool, preset, regionPreference);
   const adapter = defaultRegistry.resolveChatAdapter(decision.selected_provider_model);
@@ -167,5 +221,25 @@ export async function buildResponsesStubResponse(body: unknown, requestId: strin
       })),
       region: decision.region
     }
+  });
+}
+
+export function buildRoutingExplainResponse(body: unknown, requestId: string): RoutingExplainResponse {
+  const parsed = routingExplainRequestSchema.parse(body);
+  const preset: RoutingPreset = parsed.routing_preset ?? "balanced";
+  const candidatePool = buildCandidatePool(parsed.model);
+  const decision = selectRoutingCandidate(candidatePool, preset, parsed.region_preference);
+
+  return routingExplainResponseSchema.parse({
+    request_id: requestId,
+    model: parsed.model,
+    preset: decision.preset,
+    weights: getRoutingPresetWeights(preset),
+    selected: {
+      provider: decision.selected_provider,
+      provider_model: decision.selected_provider_model
+    },
+    region: decision.region,
+    candidates: decision.candidates
   });
 }

@@ -72,6 +72,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/routing/decision/explain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Explain routing decision factors (non-streaming) */
+        post: operations["explainRoutingDecision"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/orgs/{orgId}/usage": {
         parameters: {
             query?: never;
@@ -392,6 +409,49 @@ export interface components {
             output: components["schemas"]["ResponsesOutputMessage"][];
             usage: components["schemas"]["ResponsesUsage"];
             router: components["schemas"]["ResponsesRouterMeta"];
+        };
+        RoutingExplainRequest: {
+            model: string;
+            /** @enum {string} */
+            routing_preset?: "cost" | "latency" | "success" | "balanced";
+            /** @enum {string} */
+            region_preference?: "US" | "EU" | "APAC";
+        };
+        RoutingExplainResponse: {
+            request_id: string;
+            model: string;
+            /** @enum {string} */
+            preset: "cost" | "latency" | "success" | "balanced";
+            weights: {
+                cost: number;
+                latency: number;
+                success: number;
+            };
+            selected: {
+                provider: string;
+                provider_model: string;
+            };
+            region: {
+                /** @enum {string|null} */
+                requested_region: "US" | "EU" | "APAC" | null;
+                fallback_used: boolean;
+                excluded_candidates: {
+                    provider: string;
+                    provider_model: string;
+                    /** @enum {string} */
+                    reason: "REGION_MISMATCH";
+                }[];
+            };
+            candidates: {
+                provider: string;
+                provider_model: string;
+                regions: ("US" | "EU" | "APAC")[];
+                cost_per_1k_usd: number;
+                latency_ms: number;
+                success_rate: number;
+                score: number;
+                rank: number;
+            }[];
         };
         UsageBucket: {
             bucket: string;
@@ -801,6 +861,46 @@ export interface operations {
             };
             /** @description Idempotency key conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+        };
+    };
+    explainRoutingDecision: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "model": "router/auto",
+                 *       "routing_preset": "success",
+                 *       "region_preference": "EU"
+                 *     }
+                 */
+                "application/json": components["schemas"]["RoutingExplainRequest"];
+            };
+        };
+        responses: {
+            /** @description Routing decision trace */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoutingExplainResponse"];
+                };
+            };
+            /** @description Invalid request or unsupported model */
+            400: {
                 headers: {
                     [name: string]: unknown;
                 };
