@@ -22,7 +22,7 @@ export const createPolicySchema = z.object({
   weights: z.array(policyWeightSchema).min(1),
   fallback_chain: z.array(nonEmptyString).default([]),
   constraints: policyConstraintSchema.optional()
-});
+}).strict();
 
 export type CreatePolicyInput = z.infer<typeof createPolicySchema>;
 
@@ -39,7 +39,12 @@ export const policyRecordSchema = z.object({
 
 export type PolicyRecord = z.infer<typeof policyRecordSchema>;
 
-export class InMemoryPolicyStore {
+export interface PolicyRepository {
+  list(): PolicyRecord[];
+  create(input: CreatePolicyInput): PolicyRecord;
+}
+
+export class InMemoryPolicyStore implements PolicyRepository {
   private readonly items: PolicyRecord[];
   private nextId: number;
 
