@@ -93,6 +93,7 @@ require_number "KEY_MODULE_COVERAGE_THRESHOLD" "$KEY_MODULE_THRESHOLD"
 
 echo "[coverage] Global coverage: ${GLOBAL_COVERAGE}% (threshold >=${GLOBAL_THRESHOLD}%)"
 echo "[coverage] Key module coverage: ${KEY_MODULE_COVERAGE}% (threshold >=${KEY_MODULE_THRESHOLD}%)"
+echo "[coverage] Summary: global=${GLOBAL_COVERAGE} key_module=${KEY_MODULE_COVERAGE}"
 
 awk -v g="$GLOBAL_COVERAGE" -v gt="$GLOBAL_THRESHOLD" -v k="$KEY_MODULE_COVERAGE" -v kt="$KEY_MODULE_THRESHOLD" '
   BEGIN {
