@@ -239,6 +239,8 @@ export interface components {
         Model: {
             id: string;
             provider: string;
+            /** @enum {string} */
+            status: "active" | "inactive";
             capabilities: string[];
         };
         ModelsListResponse: {
@@ -1276,7 +1278,10 @@ export interface operations {
     };
     listControlPlaneModels: {
         parameters: {
-            query?: never;
+            query?: {
+                provider?: "openai" | "anthropic" | "google";
+                status?: "active" | "inactive";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1295,6 +1300,7 @@ export interface operations {
                      *         {
                      *           "id": "openai/gpt-4.1-mini",
                      *           "provider": "openai",
+                     *           "status": "active",
                      *           "capabilities": [
                      *             "tools",
                      *             "vision",
@@ -1304,6 +1310,7 @@ export interface operations {
                      *         {
                      *           "id": "anthropic/claude-3-5-sonnet",
                      *           "provider": "anthropic",
+                     *           "status": "active",
                      *           "capabilities": [
                      *             "tools",
                      *             "vision"
@@ -1316,6 +1323,15 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["ModelsListResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
                 };
             };
         };

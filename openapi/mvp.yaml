@@ -486,6 +486,19 @@ paths:
     get:
       summary: List control-plane models for policy UI
       operationId: listControlPlaneModels
+      parameters:
+        - in: query
+          name: provider
+          required: false
+          schema:
+            type: string
+            enum: [openai, anthropic, google]
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [active, inactive]
       responses:
         "200":
           description: Control-plane models list
@@ -497,12 +510,20 @@ paths:
                 data:
                   - id: openai/gpt-4.1-mini
                     provider: openai
+                    status: active
                     capabilities: [tools, vision, json_schema]
                   - id: anthropic/claude-3-5-sonnet
                     provider: anthropic
+                    status: active
                     capabilities: [tools, vision]
                 meta:
                   request_id: req_cp_models_001
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingsError"
   /api/policies:
     get:
       summary: List routing policies
@@ -580,12 +601,15 @@ components:
     Model:
       type: object
       additionalProperties: false
-      required: [id, provider, capabilities]
+      required: [id, provider, status, capabilities]
       properties:
         id:
           type: string
         provider:
           type: string
+        status:
+          type: string
+          enum: [active, inactive]
         capabilities:
           type: array
           items:
