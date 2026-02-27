@@ -1,9 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
+import { InMemoryApiKeyStore } from "../src/api-keys.js";
 import { embeddingsResponseSchema } from "../src/embeddings.js";
 
 describe("POST /v1/embeddings", () => {
-  const app = buildApp();
+  const apiKeyStore = new InMemoryApiKeyStore();
+  const { plaintext } = apiKeyStore.create({ provider: "router", label: "test" });
+  const app = buildApp({ apiKeyStore });
 
   beforeAll(async () => {
     await app.ready();
@@ -20,7 +23,8 @@ describe("POST /v1/embeddings", () => {
       payload: {
         model: "openai/text-embedding-3-small",
         input: ["hello", "world"]
-      }
+      },
+      headers: { authorization: `Bearer ${plaintext}` }
     });
 
     expect(res.statusCode).toBe(200);
@@ -39,7 +43,8 @@ describe("POST /v1/embeddings", () => {
       payload: {
         model: "",
         input: []
-      }
+      },
+      headers: { authorization: `Bearer ${plaintext}` }
     });
 
     expect(res.statusCode).toBe(400);
@@ -60,7 +65,8 @@ describe("POST /v1/embeddings", () => {
       payload: {
         model: "anthropic/text-embedding-foo",
         input: "hello"
-      }
+      },
+      headers: { authorization: `Bearer ${plaintext}` }
     });
 
     expect(res.statusCode).toBe(400);

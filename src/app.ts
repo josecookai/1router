@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { z } from "zod";
 import { InMemoryApiKeyStore, buildApiKeysListResponse, buildCreateApiKeyResponse } from "./api-keys.js";
+import { ApiKeyStoreRouterAuthRepository, authenticateRouterKey } from "./auth.js";
 import { buildChatCompletionsStubResponse } from "./chat-completions.js";
 import { buildEmbeddingsStubResponse } from "./embeddings.js";
 import { buildModelsListResponse } from "./models-catalog.js";
@@ -51,6 +52,7 @@ type BuildAppOptions = {
 export function buildApp(options: BuildAppOptions = {}) {
   const app = Fastify({ logger: false });
   const apiKeyStore = options.apiKeyStore ?? new InMemoryApiKeyStore();
+  const authRepo = new ApiKeyStoreRouterAuthRepository(apiKeyStore);
   const policyStore = options.policyStore ?? new InMemoryPolicyStore();
   const publicDir = path.resolve(process.cwd(), "public");
 
@@ -77,6 +79,19 @@ export function buildApp(options: BuildAppOptions = {}) {
 
   app.get("/v1/models", async () => {
     return buildModelsListResponse();
+  });
+
+  app.addHook("onRequest", async (request, reply) => {
+    if (!request.url.startsWith("/v1/")) return;
+
+    const context = authenticateRouterKey(request.headers.authorization, authRepo);
+    if (!context) {
+      reply.header("x-request-id", request.id);
+      reply.code(401);
+      return reply.send(requestErrorEnvelope(request.id, "UNAUTHORIZED", "Missing or invalid bearer token"));
+    }
+
+    (request as { router_auth?: typeof context }).router_auth = context;
   });
 
   app.post("/v1/embeddings", async (request, reply) => {

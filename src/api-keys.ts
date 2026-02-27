@@ -46,6 +46,11 @@ type StoredApiKey = {
   status: "active" | "inactive";
 };
 
+export type ActiveApiKeyLookup = {
+  id: string;
+  key_prefix: string;
+};
+
 export function generateRouterApiKey() {
   const secret = randomBytes(18).toString("base64url");
   const key = `rk_live_${secret}`;
@@ -99,6 +104,11 @@ export class InMemoryApiKeyStore {
   // Test-only visibility to assert plaintext is not stored.
   snapshotStoredRecords() {
     return this.keys.map((record) => ({ ...record }));
+  }
+
+  findActiveByHash(keyHash: string): ActiveApiKeyLookup | null {
+    const found = this.keys.find((record) => record.key_hash === keyHash && record.status === "active");
+    return found ? { id: found.id, key_prefix: found.key_prefix } : null;
   }
 }
 
