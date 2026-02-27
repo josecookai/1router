@@ -661,7 +661,7 @@ components:
     OrgUsageData:
       type: object
       additionalProperties: false
-      required: [org_id, from, to, group_by, totals, buckets]
+      required: [org_id, from, to, group_by, provisional, finalized_at, totals, buckets]
       properties:
         org_id:
           type: string
@@ -674,6 +674,12 @@ components:
         group_by:
           type: string
           enum: [hour, model]
+        provisional:
+          type: boolean
+        finalized_at:
+          type: string
+          format: date-time
+          nullable: true
         totals:
           $ref: "#/components/schemas/UsageBucket"
         buckets:

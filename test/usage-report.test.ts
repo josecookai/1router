@@ -36,8 +36,26 @@ describe("usage report aggregation", () => {
     });
 
     expect(result.data.group_by).toBe("model");
+    expect(result.data.provisional).toBe(false);
+    expect(result.data.finalized_at).toBe("2026-02-26T12:00:00.000Z");
     expect(result.data.buckets).toHaveLength(2);
     expect(result.data.totals.requests).toBe(28);
     expect(result.data.totals.total_tokens).toBe(3240);
+  });
+
+  it("marks future window as provisional", () => {
+    const repo = new FixtureUsageRepository();
+    const result = buildUsageReportResponse(repo, {
+      orgId: "org_demo",
+      requestId: "req_usage_2",
+      query: {
+        from: "2999-01-01T00:00:00.000Z",
+        to: "2999-01-01T01:00:00.000Z",
+        group_by: "hour"
+      }
+    });
+
+    expect(result.data.provisional).toBe(true);
+    expect(result.data.finalized_at).toBeNull();
   });
 });

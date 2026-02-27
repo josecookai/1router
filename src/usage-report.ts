@@ -27,6 +27,8 @@ export const usageReportResponseSchema = z.object({
     from: z.string().datetime(),
     to: z.string().datetime(),
     group_by: z.enum(["hour", "model"]),
+    provisional: z.boolean(),
+    finalized_at: z.string().datetime().nullable(),
     totals: usageBucketSchema,
     buckets: z.array(usageBucketSchema)
   }),
@@ -114,6 +116,9 @@ export function buildUsageReportResponse(
   params: { orgId: string; query: unknown; requestId: string }
 ) {
   const query = usageQuerySchema.parse(params.query);
+  const toMs = new Date(query.to).getTime();
+  const provisional = toMs > Date.now();
+  const finalizedAt = provisional ? null : new Date(toMs).toISOString();
   const events = repo.listForOrg(params.orgId, query.from, query.to);
   const map = new Map<string, z.infer<typeof usageBucketSchema>>();
 
@@ -149,6 +154,8 @@ export function buildUsageReportResponse(
       from: query.from,
       to: query.to,
       group_by: query.group_by,
+      provisional,
+      finalized_at: finalizedAt,
       totals,
       buckets
     },

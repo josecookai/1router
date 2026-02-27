@@ -298,6 +298,9 @@ export interface components {
             to: string;
             /** @enum {string} */
             group_by: "hour" | "model";
+            provisional: boolean;
+            /** Format: date-time */
+            finalized_at: string | null;
             totals: components["schemas"]["UsageBucket"];
             buckets: components["schemas"]["UsageBucket"][];
         };

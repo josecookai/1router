@@ -26,6 +26,8 @@ describe("GET /api/orgs/:orgId/usage", () => {
     expect(parsed.meta.request_id).toBe(res.headers["x-request-id"]);
     expect(parsed.data.org_id).toBe("org_demo");
     expect(parsed.data.group_by).toBe("hour");
+    expect(parsed.data.provisional).toBe(false);
+    expect(parsed.data.finalized_at).toBe("2026-02-26T12:00:00.000Z");
     expect(parsed.data.buckets).toHaveLength(2);
     expect(parsed.data.totals.requests).toBe(28);
   });
