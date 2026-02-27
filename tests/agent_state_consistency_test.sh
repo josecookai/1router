@@ -39,8 +39,29 @@ test_branch_naming_validator() {
   out="$(run_case 0 bash "$ROOT_DIR/scripts/agent/check-branch-name.sh" infra M-013 codex/infra-m-013-state-consistency)"
   assert_contains "$out" "[branch-check] PASS"
 
+  out="$(run_case 0 bash "$ROOT_DIR/scripts/agent/check-branch-name.sh" router M-034 codex/router-m-034-route-trace)"
+  assert_contains "$out" "[branch-check] PASS"
+
   out="$(run_case 1 bash "$ROOT_DIR/scripts/agent/check-branch-name.sh" ui M-013 codex/infra-m-013-state-consistency)"
   assert_contains "$out" "does not match"
+
+  out="$(run_case 1 bash "$ROOT_DIR/scripts/agent/check-branch-name.sh" data M-013 codex/data-m-013-state-consistency)"
+  assert_contains "$out" "lane must be"
+}
+
+test_issue_transition_validator() {
+  local out
+  out="$(run_case 0 bash "$ROOT_DIR/scripts/agent/check-issue-transition.sh" "ready,P1,area/router" "in_progress")"
+  assert_contains "$out" "PASS: ready -> in_progress"
+
+  out="$(run_case 0 bash "$ROOT_DIR/scripts/agent/check-issue-transition.sh" "in_progress,P1,area/router" "done")"
+  assert_contains "$out" "-> done"
+
+  out="$(run_case 1 bash "$ROOT_DIR/scripts/agent/check-issue-transition.sh" "blocked,P1,area/router" "in_progress")"
+  assert_contains "$out" "requires 'ready' label"
+
+  out="$(run_case 1 bash "$ROOT_DIR/scripts/agent/check-issue-transition.sh" "blocked,P1,area/router" "done")"
+  assert_contains "$out" "requires 'in_progress' or 'ready' label"
 }
 
 test_blocked_helper_dry_run() {
@@ -58,6 +79,7 @@ test_merge_script_removes_ready_label() {
 }
 
 test_branch_naming_validator
+test_issue_transition_validator
 test_blocked_helper_dry_run
 test_merge_script_removes_ready_label
 

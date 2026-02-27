@@ -16,6 +16,11 @@ if [[ -n "$MILESTONE_ID" || -n "$LANE" ]]; then
   "$SCRIPT_DIR/check-branch-name.sh" "$LANE" "$MILESTONE_ID"
 fi
 
+LABELS_CSV="$(gh issue view "$ISSUE" --json labels --jq '[.labels[].name] | join(\",\")' 2>/dev/null || true)"
+if [[ -n "$LABELS_CSV" ]]; then
+  "$SCRIPT_DIR/check-issue-transition.sh" "$LABELS_CSV" "in_progress"
+fi
+
 gh issue edit "$ISSUE" --add-label "in_progress" --remove-label "ready" >/dev/null || true
 
 if [[ "$ASSIGNEE" != "@me" ]]; then

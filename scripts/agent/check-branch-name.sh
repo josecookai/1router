@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-LANE="${1:?lane required (ui|infra)}"
+LANE="${1:?lane required (router|billing|ui|infra)}"
 MILESTONE_ID="${2:?milestone id required (e.g. M-013)}"
 BRANCH_INPUT="${3:-}"
 
-if [[ "$LANE" != "ui" && "$LANE" != "infra" ]]; then
-  echo "[branch-check] FAIL: lane must be ui or infra, got '$LANE'" >&2
+if [[ "$LANE" != "router" && "$LANE" != "billing" && "$LANE" != "ui" && "$LANE" != "infra" ]]; then
+  echo "[branch-check] FAIL: lane must be router, billing, ui, or infra, got '$LANE'" >&2
   exit 1
 fi
 

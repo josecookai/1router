@@ -18,7 +18,11 @@ import {
   updateProjectSchema
 } from "./org-projects.js";
 import { InMemoryPolicyStore, type PolicyRepository, createPolicySchema } from "./policies.js";
-import { buildResponsesStubResponse, type ResponsesResponse } from "./responses.js";
+import {
+  buildResponsesStubResponse,
+  buildRoutingExplainResponse,
+  type ResponsesResponse
+} from "./responses.js";
 import {
   InMemorySliMetricsStore,
   sliDashboardQuerySchema,
@@ -226,6 +230,26 @@ export function buildApp(options: BuildAppOptions = {}) {
         request.id,
         "UNSUPPORTED_MODEL",
         error instanceof Error ? error.message : "Unsupported responses model"
+      );
+    }
+  });
+
+  app.post("/v1/routing/decision/explain", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    try {
+      return buildRoutingExplainResponse(request.body, request.id);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid routing explain request", error.issues);
+      }
+
+      reply.code(400);
+      return requestErrorEnvelope(
+        request.id,
+        "UNSUPPORTED_MODEL",
+        error instanceof Error ? error.message : "Unsupported routing explain model"
       );
     }
   });
