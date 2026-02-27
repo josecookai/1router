@@ -76,6 +76,28 @@ EOF
   assert_contains "$out" "[coverage] PASS"
 }
 
+test_summary_file_key_alias_pass() {
+  local tmp
+  tmp="$(mktemp)"
+  cat >"$tmp" <<EOF
+global=90
+key=81.25
+EOF
+  local out
+  out="$(run_case file-key-alias 0 env -i PATH="$PATH" HOME="${HOME:-/tmp}" COVERAGE_DISABLE_NPM=1 COVERAGE_SUMMARY_FILE="$tmp" bash "$COVERAGE_SCRIPT")"
+  rm -f "$tmp"
+  assert_contains "$out" "Global coverage: 90%"
+  assert_contains "$out" "Key module coverage: 81.25%"
+  assert_contains "$out" "[coverage] PASS"
+}
+
+test_output_summary_lines_stable() {
+  local out
+  out="$(run_case output-stable 0 env -i PATH="$PATH" HOME="${HOME:-/tmp}" COVERAGE_DISABLE_NPM=1 GLOBAL_COVERAGE=92 KEY_MODULE_COVERAGE=83 bash "$COVERAGE_SCRIPT")"
+  assert_contains "$out" "[coverage] Global coverage: 92% (threshold >=85%)"
+  assert_contains "$out" "[coverage] Key module coverage: 83% (threshold >=80%)"
+}
+
 test_summary_file_missing_key_fails() {
   local tmp
   tmp="$(mktemp)"
@@ -93,6 +115,8 @@ test_env_values_pass
 test_threshold_failure_fails
 test_invalid_numeric_fails
 test_summary_file_pass_and_parse
+test_summary_file_key_alias_pass
+test_output_summary_lines_stable
 test_summary_file_missing_key_fails
 
 echo "[test] coverage_gate_test.sh PASS"
