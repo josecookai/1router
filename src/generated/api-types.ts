@@ -246,6 +246,8 @@ export interface components {
             input: string;
             /** @enum {string} */
             routing_preset?: "cost" | "latency" | "success" | "balanced";
+            /** @enum {string} */
+            region_preference?: "US" | "EU" | "APAC";
             /** @enum {boolean} */
             stream?: false;
             temperature?: number;
@@ -280,6 +282,17 @@ export interface components {
                 score: number;
                 rank: number;
             }[];
+            region: {
+                /** @enum {string|null} */
+                requested_region: "US" | "EU" | "APAC" | null;
+                fallback_used: boolean;
+                excluded_candidates: {
+                    provider: string;
+                    provider_model: string;
+                    /** @enum {string} */
+                    reason: "REGION_MISMATCH";
+                }[];
+            };
         };
         ResponsesResponse: {
             id: string;

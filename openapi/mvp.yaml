@@ -563,6 +563,9 @@ components:
         routing_preset:
           type: string
           enum: [cost, latency, success, balanced]
+        region_preference:
+          type: string
+          enum: [US, EU, APAC]
         stream:
           type: boolean
           enum: [false]
@@ -616,7 +619,7 @@ components:
     ResponsesRouterMeta:
       type: object
       additionalProperties: false
-      required: [provider, provider_model, request_id, preset, candidates]
+      required: [provider, provider_model, request_id, preset, candidates, region]
       properties:
         provider:
           type: string
@@ -644,6 +647,31 @@ components:
               rank:
                 type: integer
                 minimum: 1
+        region:
+          type: object
+          additionalProperties: false
+          required: [requested_region, fallback_used, excluded_candidates]
+          properties:
+            requested_region:
+              type: string
+              enum: [US, EU, APAC]
+              nullable: true
+            fallback_used:
+              type: boolean
+            excluded_candidates:
+              type: array
+              items:
+                type: object
+                additionalProperties: false
+                required: [provider, provider_model, reason]
+                properties:
+                  provider:
+                    type: string
+                  provider_model:
+                    type: string
+                  reason:
+                    type: string
+                    enum: [REGION_MISMATCH]
     ResponsesResponse:
       type: object
       additionalProperties: false

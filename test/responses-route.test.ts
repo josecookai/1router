@@ -170,4 +170,48 @@ describe("POST /v1/responses", () => {
     expect(parsed.router.provider).toBe("anthropic");
     expect(parsed.router.candidates[0]?.provider).toBe("anthropic");
   });
+
+  it("applies region preference when compliant candidates exist", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/responses",
+      payload: {
+        model: "router/auto",
+        input: "Pick EU provider",
+        routing_preset: "cost",
+        region_preference: "EU"
+      },
+      headers: { authorization: `Bearer ${plaintext}` }
+    });
+
+    expect(res.statusCode).toBe(200);
+    const parsed = responsesResponseSchema.parse(res.json());
+    expect(parsed.router.region.requested_region).toBe("EU");
+    expect(parsed.router.region.fallback_used).toBe(false);
+    expect(parsed.router.provider).toBe("openai");
+    expect(parsed.router.candidates).toHaveLength(1);
+    expect(parsed.router.region.excluded_candidates).toHaveLength(2);
+  });
+
+  it("falls back when no candidate matches region preference", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/responses",
+      payload: {
+        model: "anthropic/claude-3-5-sonnet",
+        input: "Pick provider with fallback",
+        routing_preset: "success",
+        region_preference: "EU"
+      },
+      headers: { authorization: `Bearer ${plaintext}` }
+    });
+
+    expect(res.statusCode).toBe(200);
+    const parsed = responsesResponseSchema.parse(res.json());
+    expect(parsed.router.region.requested_region).toBe("EU");
+    expect(parsed.router.region.fallback_used).toBe(true);
+    expect(parsed.router.provider).toBe("anthropic");
+    expect(parsed.router.candidates[0]?.provider).toBe("anthropic");
+    expect(parsed.router.region.excluded_candidates[0]?.reason).toBe("REGION_MISMATCH");
+  });
 });
