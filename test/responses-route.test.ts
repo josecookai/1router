@@ -35,6 +35,9 @@ describe("POST /v1/responses", () => {
     expect(parsed.output[0]?.type).toBe("message");
     expect(parsed.output[0]?.content[0]?.type).toBe("output_text");
     expect(parsed.router.request_id).toBe(res.headers["x-request-id"]);
+    expect(parsed.router.preset).toBe("balanced");
+    expect(parsed.router.candidates.length).toBeGreaterThan(0);
+    expect(parsed.router.candidates[0]?.rank).toBe(1);
   });
 
   it("returns shared error envelope for invalid payload", async () => {
@@ -64,7 +67,7 @@ describe("POST /v1/responses", () => {
       method: "POST",
       url: "/v1/responses",
       payload: {
-        model: "anthropic/claude-3-5-sonnet",
+        model: "mistral/mistral-large",
         input: "hello"
       },
       headers: { authorization: `Bearer ${plaintext}` }
@@ -147,5 +150,24 @@ describe("POST /v1/responses", () => {
         request_id: conflict.headers["x-request-id"]
       }
     });
+  });
+
+  it("returns selected routing preset metadata for auto model", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/responses",
+      payload: {
+        model: "router/auto",
+        input: "Pick provider",
+        routing_preset: "success"
+      },
+      headers: { authorization: `Bearer ${plaintext}` }
+    });
+
+    expect(res.statusCode).toBe(200);
+    const parsed = responsesResponseSchema.parse(res.json());
+    expect(parsed.router.preset).toBe("success");
+    expect(parsed.router.provider).toBe("anthropic");
+    expect(parsed.router.candidates[0]?.provider).toBe("anthropic");
   });
 });

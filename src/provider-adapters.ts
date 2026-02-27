@@ -153,8 +153,76 @@ export class OpenAIStubProviderAdapter implements ProviderAdapter {
   }
 }
 
+export class AnthropicStubProviderAdapter implements ProviderAdapter {
+  readonly provider = "anthropic";
+
+  supportsEmbeddings(_model: string) {
+    return false;
+  }
+
+  supportsChatCompletions(model: string) {
+    return model.startsWith("anthropic/");
+  }
+
+  async createEmbeddings(): Promise<EmbeddingsProviderResult> {
+    throw new Error("Embeddings not supported for anthropic stub");
+  }
+
+  async createChatCompletion(request: ChatCompletionInput): Promise<ChatCompletionProviderResult> {
+    const lastUserMessage = [...request.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+    const content = `Anthropic stub: ${lastUserMessage || "ok"}`;
+
+    return {
+      provider: this.provider,
+      provider_model: request.model,
+      model: request.model,
+      content,
+      usage: {
+        prompt_tokens: Math.max(1, Math.ceil(lastUserMessage.length / 4)),
+        completion_tokens: Math.max(1, Math.ceil(content.length / 4)),
+        total_tokens: Math.max(2, Math.ceil((lastUserMessage.length + content.length) / 4))
+      }
+    };
+  }
+}
+
+export class GoogleStubProviderAdapter implements ProviderAdapter {
+  readonly provider = "google";
+
+  supportsEmbeddings(_model: string) {
+    return false;
+  }
+
+  supportsChatCompletions(model: string) {
+    return model.startsWith("google/");
+  }
+
+  async createEmbeddings(): Promise<EmbeddingsProviderResult> {
+    throw new Error("Embeddings not supported for google stub");
+  }
+
+  async createChatCompletion(request: ChatCompletionInput): Promise<ChatCompletionProviderResult> {
+    const lastUserMessage = [...request.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+    const content = `Google stub: ${lastUserMessage || "ok"}`;
+
+    return {
+      provider: this.provider,
+      provider_model: request.model,
+      model: request.model,
+      content,
+      usage: {
+        prompt_tokens: Math.max(1, Math.ceil(lastUserMessage.length / 4)),
+        completion_tokens: Math.max(1, Math.ceil(content.length / 4)),
+        total_tokens: Math.max(2, Math.ceil((lastUserMessage.length + content.length) / 4))
+      }
+    };
+  }
+}
+
 export function buildDefaultProviderAdapterRegistry() {
   const registry = new ProviderAdapterRegistry();
   registry.register(new OpenAIStubProviderAdapter());
+  registry.register(new AnthropicStubProviderAdapter());
+  registry.register(new GoogleStubProviderAdapter());
   return registry;
 }

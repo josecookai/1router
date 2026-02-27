@@ -560,6 +560,9 @@ components:
         input:
           type: string
           minLength: 1
+        routing_preset:
+          type: string
+          enum: [cost, latency, success, balanced]
         stream:
           type: boolean
           enum: [false]
@@ -613,7 +616,7 @@ components:
     ResponsesRouterMeta:
       type: object
       additionalProperties: false
-      required: [provider, provider_model, request_id]
+      required: [provider, provider_model, request_id, preset, candidates]
       properties:
         provider:
           type: string
@@ -621,6 +624,26 @@ components:
           type: string
         request_id:
           type: string
+        preset:
+          type: string
+          enum: [cost, latency, success, balanced]
+        candidates:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            additionalProperties: false
+            required: [provider, provider_model, score, rank]
+            properties:
+              provider:
+                type: string
+              provider_model:
+                type: string
+              score:
+                type: number
+              rank:
+                type: integer
+                minimum: 1
     ResponsesResponse:
       type: object
       additionalProperties: false

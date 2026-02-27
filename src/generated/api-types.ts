@@ -244,6 +244,8 @@ export interface components {
         ResponsesRequest: {
             model: string;
             input: string;
+            /** @enum {string} */
+            routing_preset?: "cost" | "latency" | "success" | "balanced";
             /** @enum {boolean} */
             stream?: false;
             temperature?: number;
@@ -270,6 +272,14 @@ export interface components {
             provider: string;
             provider_model: string;
             request_id: string;
+            /** @enum {string} */
+            preset: "cost" | "latency" | "success" | "balanced";
+            candidates: {
+                provider: string;
+                provider_model: string;
+                score: number;
+                rank: number;
+            }[];
         };
         ResponsesResponse: {
             id: string;
