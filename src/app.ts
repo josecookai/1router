@@ -6,7 +6,7 @@ import { InMemoryApiKeyStore, buildApiKeysListResponse, buildCreateApiKeyRespons
 import { buildChatCompletionsStubResponse } from "./chat-completions.js";
 import { buildEmbeddingsStubResponse } from "./embeddings.js";
 import { buildModelsListResponse } from "./models-catalog.js";
-import { InMemoryPolicyStore, createPolicySchema } from "./policies.js";
+import { InMemoryPolicyStore, type PolicyRepository, createPolicySchema } from "./policies.js";
 import { FixtureUsageRepository, buildUsageReportResponse } from "./usage-report.js";
 
 const healthzResponseSchema = z.object({
@@ -44,7 +44,7 @@ function requestErrorEnvelope(requestId: string, code: string, message: string, 
 
 type BuildAppOptions = {
   apiKeyStore?: InMemoryApiKeyStore;
-  policyStore?: InMemoryPolicyStore;
+  policyStore?: PolicyRepository;
   usageRepo?: FixtureUsageRepository;
 };
 

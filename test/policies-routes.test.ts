@@ -91,4 +91,46 @@ describe("ui control-plane endpoints", () => {
       }
     });
   });
+
+  it("POST /api/policies rejects malformed weights fields", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/policies",
+      payload: {
+        name: "bad-weights",
+        route: "/v1/chat/completions",
+        weights: [{ provider: "", value: -1 }]
+      }
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: {
+        code: "INVALID_REQUEST",
+        message: "Invalid policy payload"
+      }
+    });
+  });
+
+  it("POST /api/policies rejects malformed fallback_chain and constraints", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/policies",
+      payload: {
+        name: "bad-constraints",
+        route: "/v1/chat/completions",
+        weights: [{ provider: "openai", value: 1 }],
+        fallback_chain: [1],
+        constraints: { unsupported: true }
+      }
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({
+      error: {
+        code: "INVALID_REQUEST",
+        message: "Invalid policy payload"
+      }
+    });
+  });
 });
