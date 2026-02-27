@@ -236,6 +236,35 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EmbeddingsError"
+  /api/orgs/{orgId}/invoice:
+    get:
+      summary: Read monthly invoice line items for an org
+      operationId: getOrgInvoice
+      parameters:
+        - in: path
+          name: orgId
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: month
+          required: true
+          schema:
+            type: string
+            pattern: "^[0-9]{4}-[0-9]{2}$"
+      responses:
+        "200":
+          description: Monthly invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgInvoiceResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingsError"
   /api/keys:
     post:
       summary: Create provider API key (returns plaintext once)
@@ -996,6 +1025,72 @@ components:
       properties:
         data:
           $ref: "#/components/schemas/OrgUsageData"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    InvoiceLineItem:
+      type: object
+      additionalProperties: false
+      required: [provider, model, quantity, unit_price, subtotal, platform_fee]
+      properties:
+        provider:
+          type: string
+        model:
+          type: string
+        quantity:
+          type: integer
+          minimum: 0
+        unit_price:
+          type: number
+          minimum: 0
+        subtotal:
+          type: number
+          minimum: 0
+        platform_fee:
+          type: number
+          minimum: 0
+    InvoiceTotals:
+      type: object
+      additionalProperties: false
+      required: [quantity, subtotal, platform_fee, grand_total]
+      properties:
+        quantity:
+          type: integer
+          minimum: 0
+        subtotal:
+          type: number
+          minimum: 0
+        platform_fee:
+          type: number
+          minimum: 0
+        grand_total:
+          type: number
+          minimum: 0
+    OrgInvoiceData:
+      type: object
+      additionalProperties: false
+      required: [org_id, month, currency, line_items, totals]
+      properties:
+        org_id:
+          type: string
+        month:
+          type: string
+          pattern: "^[0-9]{4}-[0-9]{2}$"
+        currency:
+          type: string
+          enum: [USD]
+        line_items:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceLineItem"
+        totals:
+          $ref: "#/components/schemas/InvoiceTotals"
+    OrgInvoiceResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/OrgInvoiceData"
         meta:
           $ref: "#/components/schemas/Meta"
     CreateApiKeyRequest:

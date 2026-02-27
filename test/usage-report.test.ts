@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
   FixtureUsageRepository,
+  buildMonthlyInvoiceResponse,
   buildUsageReportResponse,
+  monthlyInvoiceQuerySchema,
   runUsageFinalizationJob,
   usageQuerySchema,
   type UsageEvent
@@ -168,5 +170,44 @@ describe("usage finalization job", () => {
     expect(provisionalBucket?.provisional).toBe(true);
     expect(provisionalBucket?.finalized_at).toBeNull();
     expect(report.data.totals.provisional).toBe(true);
+  });
+});
+
+describe("monthly invoice generation", () => {
+  it("validates month query format", () => {
+    expect(monthlyInvoiceQuerySchema.parse({ month: "2026-02" }).month).toBe("2026-02");
+    expect(() => monthlyInvoiceQuerySchema.parse({ month: "2026/02" })).toThrow();
+  });
+
+  it("groups line items by provider and model with reconciled totals", () => {
+    const repo = new FixtureUsageRepository();
+    const invoice = buildMonthlyInvoiceResponse(repo, {
+      orgId: "org_demo",
+      requestId: "req_invoice_1",
+      query: { month: "2026-02" }
+    });
+
+    expect(invoice.data.line_items).toHaveLength(2);
+    expect(invoice.data.line_items[0]).toMatchObject({
+      provider: "openai",
+      model: "openai/gpt-4.1-mini",
+      quantity: 16,
+      subtotal: 0.2,
+      platform_fee: 0.035
+    });
+    expect(invoice.data.line_items[1]).toMatchObject({
+      provider: "openai",
+      model: "openai/text-embedding-3-small",
+      quantity: 12,
+      subtotal: 0.03,
+      platform_fee: 0.01
+    });
+
+    const subtotalFromLines = invoice.data.line_items.reduce((sum, line) => sum + line.subtotal, 0);
+    const feeFromLines = invoice.data.line_items.reduce((sum, line) => sum + line.platform_fee, 0);
+    expect(Number(subtotalFromLines.toFixed(6))).toBe(invoice.data.totals.subtotal);
+    expect(Number(feeFromLines.toFixed(6))).toBe(invoice.data.totals.platform_fee);
+    expect(invoice.data.totals.quantity).toBe(28);
+    expect(invoice.data.totals.grand_total).toBe(0.275);
   });
 });

@@ -11,6 +11,10 @@ export const usageQuerySchema = z
     path: ["to"]
   });
 
+export const monthlyInvoiceQuerySchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/)
+});
+
 const usageBucketSchema = z.object({
   bucket: z.string(),
   requests: z.number().int().nonnegative(),
@@ -21,6 +25,33 @@ const usageBucketSchema = z.object({
   platform_fee_usd: z.number().nonnegative(),
   provisional: z.boolean(),
   finalized_at: z.string().datetime().nullable()
+});
+
+const invoiceLineItemSchema = z.object({
+  provider: z.string(),
+  model: z.string(),
+  quantity: z.number().int().nonnegative(),
+  unit_price: z.number().nonnegative(),
+  subtotal: z.number().nonnegative(),
+  platform_fee: z.number().nonnegative()
+});
+
+export const monthlyInvoiceResponseSchema = z.object({
+  data: z.object({
+    org_id: z.string(),
+    month: z.string().regex(/^\d{4}-\d{2}$/),
+    currency: z.literal("USD"),
+    line_items: z.array(invoiceLineItemSchema),
+    totals: z.object({
+      quantity: z.number().int().nonnegative(),
+      subtotal: z.number().nonnegative(),
+      platform_fee: z.number().nonnegative(),
+      grand_total: z.number().nonnegative()
+    })
+  }),
+  meta: z.object({
+    request_id: z.string()
+  })
 });
 
 export const usageReportResponseSchema = z.object({
@@ -158,6 +189,15 @@ export function runUsageFinalizationJob(
   };
 }
 
+function monthRange(month: string) {
+  const [yearStr, monthStr] = month.split("-");
+  const year = Number(yearStr);
+  const monthIndex = Number(monthStr) - 1;
+  const from = new Date(Date.UTC(year, monthIndex, 1, 0, 0, 0, 0));
+  const to = new Date(Date.UTC(year, monthIndex + 1, 1, 0, 0, 0, 0));
+  return { from: from.toISOString(), to: to.toISOString() };
+}
+
 export function buildUsageReportResponse(
   repo: FixtureUsageRepository,
   params: { orgId: string; query: unknown; requestId: string }
@@ -229,5 +269,73 @@ export function buildUsageReportResponse(
     meta: {
       request_id: params.requestId
     }
+  });
+}
+
+export function buildMonthlyInvoiceResponse(
+  repo: FixtureUsageRepository,
+  params: { orgId: string; query: unknown; requestId: string }
+) {
+  const query = monthlyInvoiceQuerySchema.parse(params.query);
+  const range = monthRange(query.month);
+  const events = repo.listForOrg(params.orgId, range.from, range.to);
+  const grouped = new Map<
+    string,
+    {
+      provider: string;
+      model: string;
+      quantity: number;
+      subtotal: number;
+      platform_fee: number;
+    }
+  >();
+
+  for (const event of events) {
+    const provider = event.model.split("/", 1)[0] ?? "unknown";
+    const key = `${provider}::${event.model}`;
+    const line = grouped.get(key) ?? {
+      provider,
+      model: event.model,
+      quantity: 0,
+      subtotal: 0,
+      platform_fee: 0
+    };
+
+    line.quantity += event.requests;
+    line.subtotal = roundMoney(line.subtotal + event.cost_usd);
+    line.platform_fee = roundMoney(line.platform_fee + event.platform_fee_usd);
+    grouped.set(key, line);
+  }
+
+  const lineItems = [...grouped.values()]
+    .sort((a, b) => a.model.localeCompare(b.model))
+    .map((line) => ({
+      provider: line.provider,
+      model: line.model,
+      quantity: line.quantity,
+      unit_price: line.quantity === 0 ? 0 : roundMoney(line.subtotal / line.quantity),
+      subtotal: line.subtotal,
+      platform_fee: line.platform_fee
+    }));
+
+  const totals = lineItems.reduce(
+    (acc, line) => ({
+      quantity: acc.quantity + line.quantity,
+      subtotal: roundMoney(acc.subtotal + line.subtotal),
+      platform_fee: roundMoney(acc.platform_fee + line.platform_fee),
+      grand_total: roundMoney(acc.grand_total + line.subtotal + line.platform_fee)
+    }),
+    { quantity: 0, subtotal: 0, platform_fee: 0, grand_total: 0 }
+  );
+
+  return monthlyInvoiceResponseSchema.parse({
+    data: {
+      org_id: params.orgId,
+      month: query.month,
+      currency: "USD",
+      line_items: lineItems,
+      totals
+    },
+    meta: { request_id: params.requestId }
   });
 }
