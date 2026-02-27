@@ -41,6 +41,11 @@ describe("usage report aggregation", () => {
     expect(result.data.buckets).toHaveLength(2);
     expect(result.data.totals.requests).toBe(28);
     expect(result.data.totals.total_tokens).toBe(3240);
+    expect(result.data.totals.provisional).toBe(true);
+    expect(result.data.totals.finalized_at).toBeNull();
+    expect(result.data.summary.provisional).toBe(true);
+    expect(result.data.summary.finalized_at).toBeNull();
+    expect(result.data.summary.totals.total_tokens).toBe(3240);
   });
 
   it("marks future window as provisional", () => {
