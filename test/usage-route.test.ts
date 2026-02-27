@@ -52,4 +52,70 @@ describe("GET /api/orgs/:orgId/usage", () => {
       }
     });
   });
+
+  it("returns 400 when from is later than to", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url:
+        "/api/orgs/org_demo/usage?from=2026-02-26T12:00:00.000Z&to=2026-02-26T10:00:00.000Z&group_by=hour"
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.headers["x-request-id"]).toBeTruthy();
+    expect(res.json()).toMatchObject({
+      error: {
+        code: "INVALID_REQUEST",
+        request_id: res.headers["x-request-id"]
+      }
+    });
+  });
+
+  it("returns 400 for invalid date format", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/orgs/org_demo/usage?from=not-a-date&to=2026-02-26T12:00:00.000Z&group_by=hour"
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.headers["x-request-id"]).toBeTruthy();
+    expect(res.json()).toMatchObject({
+      error: {
+        code: "INVALID_REQUEST",
+        request_id: res.headers["x-request-id"]
+      }
+    });
+  });
+
+  it("returns 400 for unsupported group_by", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url:
+        "/api/orgs/org_demo/usage?from=2026-02-26T10:00:00.000Z&to=2026-02-26T12:00:00.000Z&group_by=day"
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.headers["x-request-id"]).toBeTruthy();
+    expect(res.json()).toMatchObject({
+      error: {
+        code: "INVALID_REQUEST",
+        request_id: res.headers["x-request-id"]
+      }
+    });
+  });
+
+  it("returns stable empty response for valid range without events", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url:
+        "/api/orgs/org_demo/usage?from=2026-02-26T13:00:00.000Z&to=2026-02-26T14:00:00.000Z&group_by=hour"
+    });
+
+    expect(res.statusCode).toBe(200);
+    const parsed = usageReportResponseSchema.parse(res.json());
+    expect(parsed.data.buckets).toEqual([]);
+    expect(parsed.data.totals.requests).toBe(0);
+    expect(parsed.data.totals.total_tokens).toBe(0);
+    expect(parsed.data.totals.cost_usd).toBe(0);
+    expect(parsed.data.totals.platform_fee_usd).toBe(0);
+  });
 });
