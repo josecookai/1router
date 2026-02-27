@@ -486,6 +486,19 @@ paths:
     get:
       summary: List control-plane models for policy UI
       operationId: listControlPlaneModels
+      parameters:
+        - in: query
+          name: provider
+          required: false
+          schema:
+            type: string
+            enum: [openai, anthropic, google]
+        - in: query
+          name: status
+          required: false
+          schema:
+            type: string
+            enum: [active, inactive]
       responses:
         "200":
           description: Control-plane models list
@@ -503,6 +516,12 @@ paths:
                     capabilities: [tools, vision]
                 meta:
                   request_id: req_cp_models_001
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingsError"
   /api/policies:
     get:
       summary: List routing policies

@@ -26,6 +26,36 @@ describe("ui control-plane endpoints", () => {
     });
   });
 
+  it("GET /api/models supports provider/status filters", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/models?provider=anthropic&status=active"
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { data: Array<{ provider: string; status: string }> };
+    expect(body.data.length).toBeGreaterThan(0);
+    expect(body.data.every((model) => model.provider === "anthropic")).toBe(true);
+    expect(body.data.every((model) => model.status === "active")).toBe(true);
+  });
+
+  it("GET /api/models returns shared validation error for invalid query", async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/models?provider=invalid"
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.headers["x-request-id"]).toBeTruthy();
+    expect(res.json()).toMatchObject({
+      error: {
+        code: "INVALID_REQUEST",
+        message: "Invalid models list query",
+        request_id: res.headers["x-request-id"]
+      }
+    });
+  });
+
   it("POST /api/policies then GET /api/policies works with in-memory storage", async () => {
     const createRes = await app.inject({
       method: "POST",

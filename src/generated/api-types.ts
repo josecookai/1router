@@ -1276,7 +1276,10 @@ export interface operations {
     };
     listControlPlaneModels: {
         parameters: {
-            query?: never;
+            query?: {
+                provider?: "openai" | "anthropic" | "google";
+                status?: "active" | "inactive";
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -1316,6 +1319,15 @@ export interface operations {
                      *     }
                      */
                     "application/json": components["schemas"]["ModelsListResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
                 };
             };
         };
