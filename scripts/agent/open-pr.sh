@@ -7,6 +7,9 @@ AREA="${3:?area required}"
 TITLE="${4:?pr title required}"
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+"$SCRIPT_DIR/check-branch-name.sh" "$AREA" "$MILESTONE_ID" "$BRANCH"
 
 BODY_FILE="$(mktemp)"
 cat > "$BODY_FILE" <<EOF
