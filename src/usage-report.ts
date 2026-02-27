@@ -44,7 +44,7 @@ export const usageReportResponseSchema = z.object({
   })
 });
 
-type UsageEvent = {
+export type UsageEvent = {
   org_id: string;
   ts: string;
   model: string;
@@ -122,6 +122,40 @@ export class FixtureUsageRepository {
       return event.org_id === orgId && ts >= from && ts < to;
     });
   }
+
+  finalizeEligible(params: { finalizeBeforeIso: string; finalizedAtIso: string }) {
+    const cutoff = new Date(params.finalizeBeforeIso).getTime();
+    let finalized = 0;
+
+    for (const event of this.events) {
+      const eventTs = new Date(event.ts).getTime();
+      if (event.finalized_at !== null || eventTs >= cutoff) continue;
+      event.finalized_at = params.finalizedAtIso;
+      finalized += 1;
+    }
+
+    return {
+      scanned: this.events.length,
+      finalized,
+      finalized_at: params.finalizedAtIso
+    };
+  }
+}
+
+export function runUsageFinalizationJob(
+  repo: FixtureUsageRepository,
+  params: { nowIso: string; reconciliationDelayMinutes: number }
+) {
+  const cutoffMs = new Date(params.nowIso).getTime() - params.reconciliationDelayMinutes * 60 * 1000;
+  const cutoffIso = new Date(cutoffMs).toISOString();
+
+  return {
+    cutoff_iso: cutoffIso,
+    ...repo.finalizeEligible({
+      finalizeBeforeIso: cutoffIso,
+      finalizedAtIso: params.nowIso
+    })
+  };
 }
 
 export function buildUsageReportResponse(
