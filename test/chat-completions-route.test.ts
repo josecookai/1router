@@ -1,9 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { buildApp } from "../src/app.js";
+import { InMemoryApiKeyStore } from "../src/api-keys.js";
 import { chatCompletionsResponseSchema } from "../src/chat-completions.js";
 
 describe("POST /v1/chat/completions", () => {
-  const app = buildApp();
+  const apiKeyStore = new InMemoryApiKeyStore();
+  const { plaintext } = apiKeyStore.create({ provider: "router", label: "test" });
+  const app = buildApp({ apiKeyStore });
 
   beforeAll(async () => {
     await app.ready();
@@ -22,7 +25,8 @@ describe("POST /v1/chat/completions", () => {
         messages: [{ role: "user", content: "Say hi" }],
         stream: false,
         temperature: 0.7
-      }
+      },
+      headers: { authorization: `Bearer ${plaintext}` }
     });
 
     expect(res.statusCode).toBe(200);
@@ -43,7 +47,8 @@ describe("POST /v1/chat/completions", () => {
         model: "",
         messages: [],
         stream: true
-      }
+      },
+      headers: { authorization: `Bearer ${plaintext}` }
     });
 
     expect(res.statusCode).toBe(400);
