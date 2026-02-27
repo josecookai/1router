@@ -9,6 +9,7 @@ import { buildEmbeddingsStubResponse } from "./embeddings.js";
 import { loggerRedactPaths, registerInfraBaseline } from "./infra.js";
 import { buildModelsListResponse } from "./models-catalog.js";
 import { InMemoryPolicyStore, type PolicyRepository, createPolicySchema } from "./policies.js";
+import { buildResponsesStubResponse } from "./responses.js";
 import { FixtureUsageRepository, buildUsageReportResponse } from "./usage-report.js";
 
 const healthzResponseSchema = z.object({
@@ -147,6 +148,26 @@ export function buildApp(options: BuildAppOptions = {}) {
         request.id,
         "UNSUPPORTED_MODEL",
         error instanceof Error ? error.message : "Unsupported chat model"
+      );
+    }
+  });
+
+  app.post("/v1/responses", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    try {
+      return await buildResponsesStubResponse(request.body, request.id);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid responses request", error.issues);
+      }
+
+      reply.code(400);
+      return requestErrorEnvelope(
+        request.id,
+        "UNSUPPORTED_MODEL",
+        error instanceof Error ? error.message : "Unsupported responses model"
       );
     }
   });

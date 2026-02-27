@@ -55,6 +55,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/responses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create response (non-streaming stub) */
+        post: operations["createResponse"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/orgs/{orgId}/usage": {
         parameters: {
             query?: never;
@@ -223,6 +240,46 @@ export interface components {
             choices: components["schemas"]["ChatCompletionChoice"][];
             usage: components["schemas"]["ChatCompletionUsage"];
             router: components["schemas"]["ChatCompletionRouterMeta"];
+        };
+        ResponsesRequest: {
+            model: string;
+            input: string;
+            /** @enum {boolean} */
+            stream?: false;
+            temperature?: number;
+            max_output_tokens?: number;
+        };
+        ResponsesOutputText: {
+            /** @enum {string} */
+            type: "output_text";
+            text: string;
+        };
+        ResponsesOutputMessage: {
+            /** @enum {string} */
+            type: "message";
+            /** @enum {string} */
+            role: "assistant";
+            content: components["schemas"]["ResponsesOutputText"][];
+        };
+        ResponsesUsage: {
+            input_tokens: number;
+            output_tokens: number;
+            total_tokens: number;
+        };
+        ResponsesRouterMeta: {
+            provider: string;
+            provider_model: string;
+            request_id: string;
+        };
+        ResponsesResponse: {
+            id: string;
+            /** @enum {string} */
+            object: "response";
+            created: number;
+            model: string;
+            output: components["schemas"]["ResponsesOutputMessage"][];
+            usage: components["schemas"]["ResponsesUsage"];
+            router: components["schemas"]["ResponsesRouterMeta"];
         };
         UsageBucket: {
             bucket: string;
@@ -481,6 +538,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatCompletionsResponse"];
+                };
+            };
+            /** @description Invalid request or unsupported model */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+        };
+    };
+    createResponse: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "model": "openai/gpt-4.1-mini",
+                 *       "input": "Say hi",
+                 *       "stream": false
+                 *     }
+                 */
+                "application/json": components["schemas"]["ResponsesRequest"];
+            };
+        };
+        responses: {
+            /** @description Response created */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponsesResponse"];
                 };
             };
             /** @description Invalid request or unsupported model */
