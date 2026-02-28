@@ -6,15 +6,40 @@ export type IdempotencyRecord<T> = {
   response: T;
 };
 
-export class InMemoryIdempotencyStore<T> {
-  private readonly records = new Map<string, IdempotencyRecord<T>>();
+type StoreEntry<T> = {
+  record: IdempotencyRecord<T>;
+  expiresAtMs: number | null;
+};
 
-  get(key: string) {
-    return this.records.get(key) ?? null;
+type InMemoryIdempotencyStoreOptions = {
+  defaultTtlMs?: number | null;
+  now?: () => number;
+};
+
+export class InMemoryIdempotencyStore<T> {
+  private readonly records = new Map<string, StoreEntry<T>>();
+  private readonly defaultTtlMs: number | null;
+  private readonly now: () => number;
+
+  constructor(options: InMemoryIdempotencyStoreOptions = {}) {
+    this.defaultTtlMs = options.defaultTtlMs ?? null;
+    this.now = options.now ?? Date.now;
   }
 
-  set(record: IdempotencyRecord<T>) {
-    this.records.set(record.key, record);
+  get(key: string) {
+    const entry = this.records.get(key);
+    if (!entry) return null;
+    if (entry.expiresAtMs !== null && entry.expiresAtMs <= this.now()) {
+      this.records.delete(key);
+      return null;
+    }
+    return entry.record;
+  }
+
+  set(record: IdempotencyRecord<T>, ttlMs?: number | null) {
+    const effectiveTtl = ttlMs ?? this.defaultTtlMs;
+    const expiresAtMs = effectiveTtl === null ? null : this.now() + Math.max(0, effectiveTtl);
+    this.records.set(record.key, { record, expiresAtMs });
   }
 }
 
