@@ -23,6 +23,7 @@ import {
   buildRoutingExplainResponse,
   type ResponsesResponse
 } from "./responses.js";
+import { InMemoryQuotaLimiter, quotaErrorDetails } from "./quotas.js";
 import { canRoleAccess, parseRole, requiredActionForRoute } from "./rbac.js";
 import {
   InMemorySliMetricsStore,
@@ -86,6 +87,7 @@ type BuildAppOptions = {
   responsesIdempotencyStore?: InMemoryIdempotencyStore<ResponsesResponse>;
   paymentWebhookIdempotencyStore?: InMemoryIdempotencyStore<PaymentWebhookAck>;
   sliMetricsStore?: InMemorySliMetricsStore;
+  quotaLimiter?: InMemoryQuotaLimiter;
   registerRoutes?: (app: FastifyInstance) => void;
 };
 
@@ -112,6 +114,7 @@ export function buildApp(options: BuildAppOptions = {}) {
   const paymentWebhookIdempotencyStore =
     options.paymentWebhookIdempotencyStore ?? new InMemoryIdempotencyStore<PaymentWebhookAck>();
   const sliMetricsStore = options.sliMetricsStore ?? new InMemorySliMetricsStore();
+  const quotaLimiter = options.quotaLimiter ?? new InMemoryQuotaLimiter();
   const publicDir = path.resolve(process.cwd(), "public");
   (app as FastifyInstance & { sliMetricsStore?: InMemorySliMetricsStore }).sliMetricsStore = sliMetricsStore;
 
@@ -171,6 +174,37 @@ export function buildApp(options: BuildAppOptions = {}) {
         scope: action
       })
     );
+  });
+
+  app.addHook("onRequest", async (request, reply) => {
+    if (!request.url.startsWith("/v1/")) return;
+    const auth = (request as { router_auth?: { api_key_id: string; org_id: string; project_id: string } }).router_auth;
+    if (!auth) return;
+
+    const acquired = quotaLimiter.acquire({
+      method: request.method,
+      path: request.routeOptions.url ?? request.url,
+      body: request.body,
+      scope: {
+        apiKeyId: auth.api_key_id,
+        orgId: auth.org_id,
+        projectId: auth.project_id
+      }
+    });
+
+    if (!acquired.ok) {
+      reply.header("x-request-id", request.id);
+      reply.code(429);
+      return reply.send(
+        requestErrorEnvelope(request.id, "RATE_LIMITED", "Rate limit exceeded", quotaErrorDetails(acquired.violation))
+      );
+    }
+
+    (request as { quota_release?: () => void }).quota_release = acquired.release;
+  });
+
+  app.addHook("onResponse", async (request) => {
+    (request as { quota_release?: () => void }).quota_release?.();
   });
 
   app.post("/v1/embeddings", async (request, reply) => {
