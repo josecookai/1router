@@ -415,6 +415,20 @@ export interface components {
                     reason: "REGION_MISMATCH";
                 }[];
             };
+            retry: {
+                max_attempts_per_candidate: number;
+                attempt_count: number;
+                failover_count: number;
+                /** @enum {string} */
+                stop_reason: "success" | "max_attempts_exhausted" | "non_retryable_error";
+                attempts: {
+                    provider: string;
+                    provider_model: string;
+                    attempt: number;
+                    /** @enum {string} */
+                    outcome: "success" | "retryable_error" | "non_retryable_error";
+                }[];
+            };
         };
         ResponsesResponse: {
             id: string;

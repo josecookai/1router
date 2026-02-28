@@ -48,6 +48,45 @@ export type ChatCompletionProviderResult = {
   };
 };
 
+const simulatedFailureCount = new Map<string, number>();
+
+type SimulatedFailureDirective = {
+  provider: string;
+  mode: "once" | "always";
+  kind: "timeout" | "429" | "500";
+};
+
+function parseSimulatedFailureDirective(input: string): SimulatedFailureDirective | null {
+  const match = input.match(/\[fail:([a-z0-9_-]+):(once|always):(timeout|429|500)\]/i);
+  if (!match) return null;
+  return {
+    provider: match[1]!.toLowerCase(),
+    mode: match[2] as "once" | "always",
+    kind: match[3] as "timeout" | "429" | "500"
+  };
+}
+
+function maybeThrowSimulatedFailure(provider: string, model: string, userInput: string) {
+  const directive = parseSimulatedFailureDirective(userInput);
+  if (!directive || directive.provider !== provider) return;
+
+  const key = `${provider}:${model}:${userInput}:${directive.mode}:${directive.kind}`;
+  const count = simulatedFailureCount.get(key) ?? 0;
+  if (directive.mode === "once" && count > 0) return;
+  simulatedFailureCount.set(key, count + 1);
+
+  if (directive.kind === "timeout") {
+    const error = new Error(`Simulated timeout from ${provider}`);
+    (error as Error & { code?: string }).code = "ETIMEDOUT";
+    throw error;
+  }
+
+  const statusCode = directive.kind === "429" ? 429 : 500;
+  const error = new Error(`Simulated upstream ${statusCode} from ${provider}`);
+  (error as Error & { statusCode?: number }).statusCode = statusCode;
+  throw error;
+}
+
 export interface ProviderAdapter {
   readonly provider: string;
   supportsEmbeddings(model: string): boolean;
@@ -135,6 +174,7 @@ export class OpenAIStubProviderAdapter implements ProviderAdapter {
   async createChatCompletion(request: ChatCompletionInput): Promise<ChatCompletionProviderResult> {
     const prompt = request.messages.map((m) => `${m.role}: ${m.content}`).join("\n");
     const lastUserMessage = [...request.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+    maybeThrowSimulatedFailure(this.provider, request.model, lastUserMessage);
     const content = `Stub response: ${lastUserMessage || "ok"}`;
     const promptTokens = Math.max(1, Math.ceil(prompt.length / 4));
     const completionTokens = Math.max(1, Math.ceil(content.length / 4));
@@ -170,6 +210,7 @@ export class AnthropicStubProviderAdapter implements ProviderAdapter {
 
   async createChatCompletion(request: ChatCompletionInput): Promise<ChatCompletionProviderResult> {
     const lastUserMessage = [...request.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+    maybeThrowSimulatedFailure(this.provider, request.model, lastUserMessage);
     const content = `Anthropic stub: ${lastUserMessage || "ok"}`;
 
     return {
@@ -203,6 +244,7 @@ export class GoogleStubProviderAdapter implements ProviderAdapter {
 
   async createChatCompletion(request: ChatCompletionInput): Promise<ChatCompletionProviderResult> {
     const lastUserMessage = [...request.messages].reverse().find((m) => m.role === "user")?.content ?? "";
+    maybeThrowSimulatedFailure(this.provider, request.model, lastUserMessage);
     const content = `Google stub: ${lastUserMessage || "ok"}`;
 
     return {
