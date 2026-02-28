@@ -23,6 +23,7 @@ import {
   buildRoutingExplainResponse,
   type ResponsesResponse
 } from "./responses.js";
+import { canRoleAccess, parseRole, requiredActionForRoute } from "./rbac.js";
 import {
   InMemorySliMetricsStore,
   sliDashboardQuerySchema,
@@ -142,6 +143,25 @@ export function buildApp(options: BuildAppOptions = {}) {
     }
 
     (request as { router_auth?: typeof context }).router_auth = context;
+  });
+
+  app.addHook("onRequest", async (request, reply) => {
+    if (!request.url.startsWith("/api/")) return;
+
+    const action = requiredActionForRoute(request.method, request.routeOptions.url ?? "");
+    if (!action) return;
+
+    const role = parseRole(request.headers["x-org-role"]);
+    if (canRoleAccess(role, action)) return;
+
+    reply.header("x-request-id", request.id);
+    reply.code(403);
+    return reply.send(
+      requestErrorEnvelope(request.id, "FORBIDDEN", "RBAC policy denied request", {
+        role,
+        scope: action
+      })
+    );
   });
 
   app.post("/v1/embeddings", async (request, reply) => {
