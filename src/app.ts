@@ -29,6 +29,12 @@ import {
   sliDashboardQuerySchema,
   sliDashboardResponseSchema
 } from "./slo-metrics.js";
+import {
+  paymentWebhookAckSchema,
+  paymentWebhookBodySchema,
+  paymentWebhookHeadersSchema,
+  type PaymentWebhookAck
+} from "./payment-webhook.js";
 import { FixtureUsageRepository, buildMonthlyInvoiceResponse, buildUsageReportResponse } from "./usage-report.js";
 
 const healthzResponseSchema = z.object({
@@ -78,6 +84,7 @@ type BuildAppOptions = {
   orgProjectStore?: OrgProjectRepository;
   usageRepo?: FixtureUsageRepository;
   responsesIdempotencyStore?: InMemoryIdempotencyStore<ResponsesResponse>;
+  paymentWebhookIdempotencyStore?: InMemoryIdempotencyStore<PaymentWebhookAck>;
   sliMetricsStore?: InMemorySliMetricsStore;
   registerRoutes?: (app: FastifyInstance) => void;
 };
@@ -102,6 +109,8 @@ export function buildApp(options: BuildAppOptions = {}) {
   const orgProjectStore = options.orgProjectStore ?? new InMemoryOrgProjectStore();
   const usageRepo = options.usageRepo ?? new FixtureUsageRepository();
   const responsesIdempotencyStore = options.responsesIdempotencyStore ?? new InMemoryIdempotencyStore<ResponsesResponse>();
+  const paymentWebhookIdempotencyStore =
+    options.paymentWebhookIdempotencyStore ?? new InMemoryIdempotencyStore<PaymentWebhookAck>();
   const sliMetricsStore = options.sliMetricsStore ?? new InMemorySliMetricsStore();
   const publicDir = path.resolve(process.cwd(), "public");
   (app as FastifyInstance & { sliMetricsStore?: InMemorySliMetricsStore }).sliMetricsStore = sliMetricsStore;
@@ -494,6 +503,57 @@ export function buildApp(options: BuildAppOptions = {}) {
       if (error instanceof z.ZodError) {
         reply.code(400);
         return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid invoice request", error.issues);
+      }
+
+      throw error;
+    }
+  });
+
+  app.post("/api/webhooks/payments", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    try {
+      const headers = paymentWebhookHeadersSchema.parse(request.headers);
+      const payload = paymentWebhookBodySchema.parse(request.body);
+      const eventId = headers["x-provider-event-id"];
+      const fingerprint = buildPayloadFingerprint(payload);
+      const existing = paymentWebhookIdempotencyStore.get(eventId);
+
+      if (existing) {
+        if (existing.fingerprint !== fingerprint) {
+          reply.code(409);
+          return requestErrorEnvelope(
+            request.id,
+            "IDEMPOTENCY_KEY_CONFLICT",
+            "Provider event id already used with different payload"
+          );
+        }
+
+        reply.header("x-idempotent-replay", "true");
+        return existing.response;
+      }
+
+      const response = paymentWebhookAckSchema.parse({
+        data: {
+          event_id: eventId,
+          accepted: true,
+          replayed: false,
+          processed_at: new Date().toISOString()
+        },
+        meta: { request_id: request.id }
+      });
+
+      paymentWebhookIdempotencyStore.set({
+        key: eventId,
+        fingerprint,
+        response
+      });
+
+      return response;
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid payment webhook request", error.issues);
       }
 
       throw error;

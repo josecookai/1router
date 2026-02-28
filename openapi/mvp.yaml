@@ -616,6 +616,50 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EmbeddingsError"
+  /api/webhooks/payments:
+    post:
+      summary: Receive payment/invoice provider webhook with idempotency
+      operationId: receivePaymentWebhook
+      parameters:
+        - in: header
+          name: x-provider-event-id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PaymentWebhookRequest"
+            example:
+              provider: stripe
+              event_type: payment.succeeded
+              org_id: org_demo
+              invoice_id: inv_2026_02
+              payment_id: pay_123
+              amount_cents: 275
+              currency: USD
+              occurred_at: "2026-02-27T12:00:00.000Z"
+      responses:
+        "200":
+          description: Payment webhook accepted or replayed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentWebhookAck"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingsError"
+        "409":
+          description: Event id conflict
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingsError"
 components:
   schemas:
     Meta:
@@ -1243,6 +1287,55 @@ components:
       properties:
         data:
           $ref: "#/components/schemas/OrgInvoiceData"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    PaymentWebhookRequest:
+      type: object
+      additionalProperties: false
+      required: [provider, event_type, org_id, occurred_at]
+      properties:
+        provider:
+          type: string
+          minLength: 1
+        event_type:
+          type: string
+          enum: [payment.succeeded, payment.failed, invoice.generated]
+        org_id:
+          type: string
+          minLength: 1
+        invoice_id:
+          type: string
+        payment_id:
+          type: string
+        amount_cents:
+          type: integer
+          minimum: 0
+        currency:
+          type: string
+          minLength: 3
+          maxLength: 3
+        occurred_at:
+          type: string
+          format: date-time
+    PaymentWebhookAck:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          additionalProperties: false
+          required: [event_id, accepted, replayed, processed_at]
+          properties:
+            event_id:
+              type: string
+            accepted:
+              type: boolean
+            replayed:
+              type: boolean
+            processed_at:
+              type: string
+              format: date-time
         meta:
           $ref: "#/components/schemas/Meta"
     CreateApiKeyRequest:
