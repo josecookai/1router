@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { InMemoryApiKeyStore } from "../src/api-keys.js";
 import { buildApp } from "../src/app.js";
+import { InMemoryProviderIncidentStore } from "../src/provider-incidents.js";
 import { responsesResponseSchema } from "../src/responses.js";
 
 describe("POST /v1/responses", () => {
@@ -213,5 +214,69 @@ describe("POST /v1/responses", () => {
     expect(parsed.router.provider).toBe("anthropic");
     expect(parsed.router.candidates[0]?.provider).toBe("anthropic");
     expect(parsed.router.region.excluded_candidates[0]?.reason).toBe("REGION_MISMATCH");
+  });
+
+  it("excludes drained providers from routing decisions", async () => {
+    let now = Date.now();
+    const incidentStore = new InMemoryProviderIncidentStore({
+      threshold: 2,
+      windowMs: 60_000,
+      cooldownMs: 300_000,
+      now: () => now
+    });
+    incidentStore.recordFailure("anthropic");
+    incidentStore.recordFailure("anthropic");
+
+    const drainedApp = buildApp({ apiKeyStore, providerIncidentStore: incidentStore });
+    await drainedApp.ready();
+    const res = await drainedApp.inject({
+      method: "POST",
+      url: "/v1/responses",
+      payload: {
+        model: "router/auto",
+        input: "Pick provider",
+        routing_preset: "success"
+      },
+      headers: { authorization: `Bearer ${plaintext}` }
+    });
+
+    expect(res.statusCode).toBe(200);
+    const parsed = responsesResponseSchema.parse(res.json());
+    expect(parsed.router.provider).toBe("openai");
+    expect(parsed.router.incidents.excluded_providers).toContain("anthropic");
+    await drainedApp.close();
+    now += 0;
+  });
+
+  it("allows drained provider again after cooldown recovery", async () => {
+    let now = Date.now();
+    const incidentStore = new InMemoryProviderIncidentStore({
+      threshold: 2,
+      windowMs: 60_000,
+      cooldownMs: 1_000,
+      now: () => now
+    });
+    incidentStore.recordFailure("anthropic");
+    incidentStore.recordFailure("anthropic");
+    now += 2_000;
+
+    const recoveredApp = buildApp({ apiKeyStore, providerIncidentStore: incidentStore });
+    await recoveredApp.ready();
+    const res = await recoveredApp.inject({
+      method: "POST",
+      url: "/v1/responses",
+      payload: {
+        model: "router/auto",
+        input: "Pick provider",
+        routing_preset: "success"
+      },
+      headers: { authorization: `Bearer ${plaintext}` }
+    });
+
+    expect(res.statusCode).toBe(200);
+    const parsed = responsesResponseSchema.parse(res.json());
+    expect(parsed.router.provider).toBe("anthropic");
+    expect(parsed.router.incidents.excluded_providers).not.toContain("anthropic");
+    await recoveredApp.close();
   });
 });

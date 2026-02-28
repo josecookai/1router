@@ -964,7 +964,7 @@ components:
     ResponsesRouterMeta:
       type: object
       additionalProperties: false
-      required: [provider, provider_model, request_id, preset, candidates, region]
+      required: [provider, provider_model, request_id, preset, candidates, region, incidents]
       properties:
         provider:
           type: string
@@ -1017,6 +1017,18 @@ components:
                   reason:
                     type: string
                     enum: [REGION_MISMATCH]
+        incidents:
+          type: object
+          additionalProperties: false
+          required: [excluded_providers, cooldown_checked_at]
+          properties:
+            excluded_providers:
+              type: array
+              items:
+                type: string
+            cooldown_checked_at:
+              type: integer
+              minimum: 0
     ResponsesResponse:
       type: object
       additionalProperties: false
