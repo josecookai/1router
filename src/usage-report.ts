@@ -15,6 +15,19 @@ export const monthlyInvoiceQuerySchema = z.object({
   month: z.string().regex(/^\d{4}-\d{2}$/)
 });
 
+export const usageListQuerySchema = z.object({
+  org_id: z.string().min(1).default("org_demo"),
+  project_id: z.string().min(1).optional(),
+  model: z.string().min(1).optional(),
+  provider: z.string().min(1).optional(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  cursor: z.string().optional()
+});
+
+export const billingListQuerySchema = usageListQuerySchema;
+
 const usageBucketSchema = z.object({
   bucket: z.string(),
   requests: z.number().int().nonnegative(),
@@ -75,8 +88,64 @@ export const usageReportResponseSchema = z.object({
   })
 });
 
+const usageListItemSchema = z.object({
+  id: z.string(),
+  org_id: z.string(),
+  project_id: z.string(),
+  provider: z.string(),
+  model: z.string(),
+  ts: z.string().datetime(),
+  requests: z.number().int().nonnegative(),
+  input_tokens: z.number().int().nonnegative(),
+  output_tokens: z.number().int().nonnegative(),
+  total_tokens: z.number().int().nonnegative(),
+  cost_usd: z.number().nonnegative(),
+  platform_fee_usd: z.number().nonnegative(),
+  provisional: z.boolean(),
+  finalized_at: z.string().datetime().nullable()
+});
+
+const billingListItemSchema = z.object({
+  id: z.string(),
+  org_id: z.string(),
+  project_id: z.string(),
+  provider: z.string(),
+  model: z.string(),
+  usage_ts: z.string().datetime(),
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+  quantity: z.number().int().nonnegative(),
+  subtotal_usd: z.number().nonnegative(),
+  platform_fee_usd: z.number().nonnegative(),
+  total_usd: z.number().nonnegative(),
+  provisional: z.boolean(),
+  finalized_at: z.string().datetime().nullable()
+});
+
+export const usageListResponseSchema = z.object({
+  data: z.array(usageListItemSchema),
+  meta: z.object({
+    request_id: z.string(),
+    page: z.object({
+      limit: z.number().int().positive(),
+      next_cursor: z.string().nullable()
+    })
+  })
+});
+
+export const billingListResponseSchema = z.object({
+  data: z.array(billingListItemSchema),
+  meta: z.object({
+    request_id: z.string(),
+    page: z.object({
+      limit: z.number().int().positive(),
+      next_cursor: z.string().nullable()
+    })
+  })
+});
+
 export type UsageEvent = {
   org_id: string;
+  project_id?: string;
   ts: string;
   model: string;
   finalized_at: string | null;
@@ -337,5 +406,121 @@ export function buildMonthlyInvoiceResponse(
       totals
     },
     meta: { request_id: params.requestId }
+  });
+}
+
+function decodeCursor(cursor: string | undefined) {
+  if (!cursor) return 0;
+  const decoded = Buffer.from(cursor, "base64url").toString("utf8");
+  const parsed = Number(decoded);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : 0;
+}
+
+function encodeCursor(offset: number) {
+  return Buffer.from(String(offset), "utf8").toString("base64url");
+}
+
+function deriveProvider(model: string) {
+  return model.split("/", 1)[0] ?? "unknown";
+}
+
+function resolveRange(query: z.infer<typeof usageListQuerySchema>) {
+  const defaultTo = new Date().toISOString();
+  const defaultFrom = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const from = query.from ?? defaultFrom;
+  const to = query.to ?? defaultTo;
+  return { from, to };
+}
+
+export function buildUsageListResponse(
+  repo: FixtureUsageRepository,
+  params: { query: unknown; requestId: string }
+) {
+  const query = usageListQuerySchema.parse(params.query);
+  const range = resolveRange(query);
+  const start = decodeCursor(query.cursor);
+  const rows = repo
+    .listForOrg(query.org_id, range.from, range.to)
+    .filter((event) => (query.project_id ? (event.project_id ?? "proj_mock") === query.project_id : true))
+    .filter((event) => (query.model ? event.model === query.model : true))
+    .filter((event) => (query.provider ? deriveProvider(event.model) === query.provider : true))
+    .sort((a, b) => b.ts.localeCompare(a.ts));
+
+  const pageRows = rows.slice(start, start + query.limit);
+  const nextOffset = start + pageRows.length;
+  const nextCursor = nextOffset < rows.length ? encodeCursor(nextOffset) : null;
+
+  return usageListResponseSchema.parse({
+    data: pageRows.map((event, index) => ({
+      id: `usage_${start + index + 1}`,
+      org_id: event.org_id,
+      project_id: event.project_id ?? "proj_mock",
+      provider: deriveProvider(event.model),
+      model: event.model,
+      ts: event.ts,
+      requests: event.requests,
+      input_tokens: event.input_tokens,
+      output_tokens: event.output_tokens,
+      total_tokens: event.input_tokens + event.output_tokens,
+      cost_usd: event.cost_usd,
+      platform_fee_usd: event.platform_fee_usd,
+      provisional: event.finalized_at === null,
+      finalized_at: event.finalized_at
+    })),
+    meta: {
+      request_id: params.requestId,
+      page: {
+        limit: query.limit,
+        next_cursor: nextCursor
+      }
+    }
+  });
+}
+
+export function buildBillingListResponse(
+  repo: FixtureUsageRepository,
+  params: { query: unknown; requestId: string }
+) {
+  const query = billingListQuerySchema.parse(params.query);
+  const range = resolveRange(query);
+  const start = decodeCursor(query.cursor);
+  const rows = repo
+    .listForOrg(query.org_id, range.from, range.to)
+    .filter((event) => (query.project_id ? (event.project_id ?? "proj_mock") === query.project_id : true))
+    .filter((event) => (query.model ? event.model === query.model : true))
+    .filter((event) => (query.provider ? deriveProvider(event.model) === query.provider : true))
+    .sort((a, b) => b.ts.localeCompare(a.ts));
+
+  const pageRows = rows.slice(start, start + query.limit);
+  const nextOffset = start + pageRows.length;
+  const nextCursor = nextOffset < rows.length ? encodeCursor(nextOffset) : null;
+
+  return billingListResponseSchema.parse({
+    data: pageRows.map((event, index) => {
+      const subtotal = roundMoney(event.cost_usd);
+      const fee = roundMoney(event.platform_fee_usd);
+      return {
+        id: `bill_${start + index + 1}`,
+        org_id: event.org_id,
+        project_id: event.project_id ?? "proj_mock",
+        provider: deriveProvider(event.model),
+        model: event.model,
+        usage_ts: event.ts,
+        month: event.ts.slice(0, 7),
+        quantity: event.requests,
+        subtotal_usd: subtotal,
+        platform_fee_usd: fee,
+        total_usd: roundMoney(subtotal + fee),
+        provisional: event.finalized_at === null,
+        finalized_at: event.finalized_at
+      };
+    }),
+    meta: {
+      request_id: params.requestId,
+      page: {
+        limit: query.limit,
+        next_cursor: nextCursor
+      }
+    }
   });
 }

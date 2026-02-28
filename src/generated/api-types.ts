@@ -123,6 +123,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List usage records for dashboard with pagination and filters */
+        get: operations["listUsageRecords"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/billing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List billing rows for dashboard with pagination and filters */
+        get: operations["listBillingRows"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/keys": {
         parameters: {
             query?: never;
@@ -531,6 +565,59 @@ export interface components {
         OrgInvoiceResponse: {
             data: components["schemas"]["OrgInvoiceData"];
             meta: components["schemas"]["Meta"];
+        };
+        PageMeta: {
+            limit: number;
+            next_cursor: string | null;
+        };
+        UsageListItem: {
+            id: string;
+            org_id: string;
+            project_id: string;
+            provider: string;
+            model: string;
+            /** Format: date-time */
+            ts: string;
+            requests: number;
+            input_tokens: number;
+            output_tokens: number;
+            total_tokens: number;
+            cost_usd: number;
+            platform_fee_usd: number;
+            provisional: boolean;
+            /** Format: date-time */
+            finalized_at: string | null;
+        };
+        UsageListResponse: {
+            data: components["schemas"]["UsageListItem"][];
+            meta: {
+                request_id: string;
+                page: components["schemas"]["PageMeta"];
+            };
+        };
+        BillingListItem: {
+            id: string;
+            org_id: string;
+            project_id: string;
+            provider: string;
+            model: string;
+            /** Format: date-time */
+            usage_ts: string;
+            month: string;
+            quantity: number;
+            subtotal_usd: number;
+            platform_fee_usd: number;
+            total_usd: number;
+            provisional: boolean;
+            /** Format: date-time */
+            finalized_at: string | null;
+        };
+        BillingListResponse: {
+            data: components["schemas"]["BillingListItem"][];
+            meta: {
+                request_id: string;
+                page: components["schemas"]["PageMeta"];
+            };
         };
         PaymentWebhookRequest: {
             provider: string;
@@ -1069,6 +1156,82 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["OrgInvoiceResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+        };
+    };
+    listUsageRecords: {
+        parameters: {
+            query?: {
+                org_id?: string;
+                project_id?: string;
+                provider?: string;
+                model?: string;
+                from?: string;
+                to?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Usage list response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UsageListResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+        };
+    };
+    listBillingRows: {
+        parameters: {
+            query?: {
+                org_id?: string;
+                project_id?: string;
+                provider?: string;
+                model?: string;
+                from?: string;
+                to?: string;
+                limit?: number;
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Billing list response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillingListResponse"];
                 };
             };
             /** @description Invalid request */

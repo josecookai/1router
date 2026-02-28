@@ -35,7 +35,13 @@ import {
   paymentWebhookHeadersSchema,
   type PaymentWebhookAck
 } from "./payment-webhook.js";
-import { FixtureUsageRepository, buildMonthlyInvoiceResponse, buildUsageReportResponse } from "./usage-report.js";
+import {
+  FixtureUsageRepository,
+  buildBillingListResponse,
+  buildMonthlyInvoiceResponse,
+  buildUsageListResponse,
+  buildUsageReportResponse
+} from "./usage-report.js";
 
 const healthzResponseSchema = z.object({
   status: z.literal("ok"),
@@ -75,6 +81,18 @@ function requestErrorEnvelope(requestId: string, code: string, message: string, 
       ...(details === undefined ? {} : { details })
     }
   };
+}
+
+type ApiKeyScope = "inference:write" | "keys:read" | "billing:read" | "policies:write";
+
+function requiredApiKeyScope(method: string, path: string): ApiKeyScope | null {
+  if (path.startsWith("/v1/")) return "inference:write";
+  if (method === "GET" && path === "/api/keys") return "keys:read";
+  if (method === "POST" && path === "/api/policies") return "policies:write";
+  if (method === "GET" && (path === "/api/orgs/:orgId/invoice" || path === "/api/usage" || path === "/api/billing")) {
+    return "billing:read";
+  }
+  return null;
 }
 
 type BuildAppOptions = {
@@ -169,6 +187,28 @@ export function buildApp(options: BuildAppOptions = {}) {
       requestErrorEnvelope(request.id, "FORBIDDEN", "RBAC policy denied request", {
         role,
         scope: action
+      })
+    );
+  });
+
+  app.addHook("onRequest", async (request, reply) => {
+    const routePath = request.routeOptions.url ?? request.url.split("?")[0] ?? "";
+    const scope = requiredApiKeyScope(request.method, routePath);
+    if (!scope) return;
+
+    const auth = request.headers.authorization;
+    if (typeof auth !== "string") return;
+
+    const context = authenticateRouterKey(auth, authRepo);
+    if (!context) return;
+    if (context.scopes.includes(scope)) return;
+
+    reply.header("x-request-id", request.id);
+    reply.code(403);
+    return reply.send(
+      requestErrorEnvelope(request.id, "FORBIDDEN", "API key scope denied request", {
+        api_key_id: context.api_key_id,
+        required_scope: scope
       })
     );
   });
@@ -516,6 +556,36 @@ export function buildApp(options: BuildAppOptions = {}) {
       if (error instanceof z.ZodError) {
         reply.code(400);
         return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid usage report request", error.issues);
+      }
+
+      throw error;
+    }
+  });
+
+  app.get("/api/usage", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    try {
+      return buildUsageListResponse(usageRepo, { query: request.query, requestId: request.id });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid usage list request", error.issues);
+      }
+
+      throw error;
+    }
+  });
+
+  app.get("/api/billing", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    try {
+      return buildBillingListResponse(usageRepo, { query: request.query, requestId: request.id });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid billing list request", error.issues);
       }
 
       throw error;
