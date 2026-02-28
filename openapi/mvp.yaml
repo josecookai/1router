@@ -76,7 +76,7 @@ paths:
                 $ref: "#/components/schemas/EmbeddingsError"
   /v1/chat/completions:
     post:
-      summary: Create chat completion (non-streaming stub)
+      summary: Create chat completion (supports streaming stub)
       operationId: createChatCompletion
       requestBody:
         required: true
@@ -98,6 +98,9 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ChatCompletionsResponse"
+            text/event-stream:
+              schema:
+                type: string
         "400":
           description: Invalid request or unsupported model
           content:
@@ -810,7 +813,6 @@ components:
             $ref: "#/components/schemas/ChatMessage"
         stream:
           type: boolean
-          enum: [false]
         temperature:
           type: number
           minimum: 0

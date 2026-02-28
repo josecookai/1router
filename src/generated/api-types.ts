@@ -47,7 +47,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create chat completion (non-streaming stub) */
+        /** Create chat completion (supports streaming stub) */
         post: operations["createChatCompletion"];
         delete?: never;
         options?: never;
@@ -328,8 +328,7 @@ export interface components {
         ChatCompletionsRequest: {
             model: string;
             messages: components["schemas"]["ChatMessage"][];
-            /** @enum {boolean} */
-            stream?: false;
+            stream?: boolean;
             temperature?: number;
             top_p?: number;
             max_tokens?: number;
@@ -845,6 +844,7 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ChatCompletionsResponse"];
+                    "text/event-stream": string;
                 };
             };
             /** @description Invalid request or unsupported model */

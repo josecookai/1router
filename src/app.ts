@@ -4,7 +4,7 @@ import path from "node:path";
 import { z } from "zod";
 import { InMemoryApiKeyStore, buildApiKeysListResponse, buildCreateApiKeyResponse } from "./api-keys.js";
 import { ApiKeyStoreRouterAuthRepository, authenticateRouterKey } from "./auth.js";
-import { buildChatCompletionsStubResponse } from "./chat-completions.js";
+import { buildChatCompletionsStreamChunks, buildChatCompletionsStubResponse } from "./chat-completions.js";
 import { buildEmbeddingsStubResponse } from "./embeddings.js";
 import { loggerRedactPaths, registerInfraBaseline } from "./infra.js";
 import { InMemoryIdempotencyStore, buildPayloadFingerprint } from "./idempotency.js";
@@ -177,6 +177,35 @@ export function buildApp(options: BuildAppOptions = {}) {
     reply.header("x-request-id", request.id);
 
     try {
+      const stream =
+        typeof request.body === "object" &&
+        request.body !== null &&
+        "stream" in request.body &&
+        (request.body as Record<string, unknown>).stream === true;
+
+      if (stream) {
+        const abortController = new AbortController();
+        const result = await buildChatCompletionsStreamChunks(request.body, request.id, {
+          signal: abortController.signal
+        });
+
+        reply.raw.setHeader("content-type", "text/event-stream; charset=utf-8");
+        reply.raw.setHeader("cache-control", "no-cache");
+        reply.raw.setHeader("connection", "keep-alive");
+        const onClose = () => abortController.abort();
+        request.raw.on("close", onClose);
+        for (const chunk of result.chunks) {
+          if (abortController.signal.aborted) break;
+          reply.raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        }
+        if (!abortController.signal.aborted && result.done) {
+          reply.raw.write("data: [DONE]\n\n");
+        }
+        request.raw.off("close", onClose);
+        reply.raw.end();
+        return reply;
+      }
+
       return await buildChatCompletionsStubResponse(request.body, request.id);
     } catch (error) {
       if (error instanceof z.ZodError) {
