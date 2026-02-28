@@ -68,16 +68,37 @@ export function scoreRoutingCandidates(candidates: RoutingCandidateMetrics[], pr
     .map((candidate, index) => ({ ...candidate, rank: index + 1 }));
 }
 
+export type ExcludedCandidate = {
+  provider: string;
+  provider_model: string;
+  reason: "REGION_MISMATCH" | "PROVIDER_DRAINED";
+};
+
 export function selectRoutingCandidate(
   candidates: RoutingCandidateMetrics[],
   preset: RoutingPreset,
-  regionPreference?: RoutingRegion
+  regionPreference?: RoutingRegion,
+  drainedProviders?: ReadonlySet<string>
 ) {
-  const regionCompliant = regionPreference
-    ? candidates.filter((candidate) => candidate.regions.includes(regionPreference))
+  // Filter out drained providers first
+  const availableCandidates = drainedProviders
+    ? candidates.filter((candidate) => !drainedProviders.has(candidate.provider))
     : candidates;
-  const excludedByRegion = regionPreference
+  const excludedByDrain = drainedProviders
     ? candidates
+        .filter((candidate) => drainedProviders.has(candidate.provider))
+        .map((candidate) => ({
+          provider: candidate.provider,
+          provider_model: candidate.provider_model,
+          reason: "PROVIDER_DRAINED" as const
+        }))
+    : [];
+
+  const regionCompliant = regionPreference
+    ? availableCandidates.filter((candidate) => candidate.regions.includes(regionPreference))
+    : availableCandidates;
+  const excludedByRegion = regionPreference
+    ? availableCandidates
         .filter((candidate) => !candidate.regions.includes(regionPreference))
         .map((candidate) => ({
           provider: candidate.provider,
@@ -85,8 +106,10 @@ export function selectRoutingCandidate(
           reason: "REGION_MISMATCH" as const
         }))
     : [];
-  const fallbackUsed = Boolean(regionPreference && regionCompliant.length === 0);
-  const effectiveCandidates = regionCompliant.length > 0 ? regionCompliant : candidates;
+
+  const allExcluded = [...excludedByDrain, ...excludedByRegion];
+  const fallbackUsed = Boolean(regionPreference && regionCompliant.length === 0 && availableCandidates.length > 0);
+  const effectiveCandidates = regionCompliant.length > 0 ? regionCompliant : availableCandidates;
 
   const scored = scoreRoutingCandidates(effectiveCandidates, preset);
   const selected = scored[0];
@@ -103,7 +126,11 @@ export function selectRoutingCandidate(
     region: {
       requested_region: regionPreference ?? null,
       fallback_used: fallbackUsed,
-      excluded_candidates: excludedByRegion
+      excluded_candidates: allExcluded
+    },
+    health: {
+      drained_providers_excluded: excludedByDrain.length > 0,
+      drained_providers: Array.from(drainedProviders ?? [])
     }
   };
 }
