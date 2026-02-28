@@ -5,10 +5,15 @@ export type RouterAuthContext = {
   key_prefix: string;
   org_id: string;
   project_id: string;
+  scopes: Array<"inference:write" | "keys:read" | "billing:read" | "policies:write">;
 };
 
 export interface RouterApiKeyRepository {
-  findActiveByHash(keyHash: string): { id: string; key_prefix: string } | null;
+  findActiveByHash(keyHash: string): {
+    id: string;
+    key_prefix: string;
+    scopes: Array<"inference:write" | "keys:read" | "billing:read" | "policies:write">;
+  } | null;
 }
 
 export class ApiKeyStoreRouterAuthRepository implements RouterApiKeyRepository {
@@ -17,7 +22,7 @@ export class ApiKeyStoreRouterAuthRepository implements RouterApiKeyRepository {
   findActiveByHash(keyHash: string) {
     const match = this.store.findActiveByHash(keyHash);
     if (!match) return null;
-    return { id: match.id, key_prefix: match.key_prefix };
+    return { id: match.id, key_prefix: match.key_prefix, scopes: match.scopes };
   }
 }
 
@@ -42,6 +47,7 @@ export function authenticateRouterKey(
     api_key_id: found.id,
     key_prefix: found.key_prefix,
     org_id: "org_mock",
-    project_id: "proj_mock"
+    project_id: "proj_mock",
+    scopes: found.scopes
   };
 }

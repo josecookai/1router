@@ -1,9 +1,12 @@
 import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 
+export const apiKeyScopeSchema = z.enum(["inference:write", "keys:read", "billing:read", "policies:write"]);
+
 export const apiKeyCreateRequestSchema = z.object({
   provider: z.string().min(1),
-  label: z.string().min(1)
+  label: z.string().min(1),
+  scopes: z.array(apiKeyScopeSchema).min(1).optional()
 });
 
 export const apiKeyMetadataSchema = z.object({
@@ -44,11 +47,13 @@ type StoredApiKey = {
   key_prefix: string;
   last4: string;
   status: "active" | "inactive";
+  scopes: Array<z.infer<typeof apiKeyScopeSchema>>;
 };
 
 export type ActiveApiKeyLookup = {
   id: string;
   key_prefix: string;
+  scopes: Array<z.infer<typeof apiKeyScopeSchema>>;
 };
 
 export function generateRouterApiKey() {
@@ -80,7 +85,8 @@ export class InMemoryApiKeyStore {
       key_hash: hashApiKey(generated.key),
       key_prefix: generated.key_prefix,
       last4: generated.last4,
-      status: "active"
+      status: "active",
+      scopes: parsed.scopes ?? ["inference:write", "keys:read", "billing:read", "policies:write"]
     };
 
     this.keys.push(record);
@@ -108,7 +114,7 @@ export class InMemoryApiKeyStore {
 
   findActiveByHash(keyHash: string): ActiveApiKeyLookup | null {
     const found = this.keys.find((record) => record.key_hash === keyHash && record.status === "active");
-    return found ? { id: found.id, key_prefix: found.key_prefix } : null;
+    return found ? { id: found.id, key_prefix: found.key_prefix, scopes: found.scopes } : null;
   }
 }
 

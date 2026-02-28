@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { InMemoryApiKeyStore } from "../src/api-keys.js";
 import { buildApp } from "../src/app.js";
 
 describe("control-plane RBAC matrix", () => {
@@ -59,6 +60,20 @@ describe("control-plane RBAC matrix", () => {
         headers
       });
       expect(billing.statusCode).toBe(row.expectCode.billingGet);
+
+      const usageList = await app.inject({
+        method: "GET",
+        url: "/api/usage?org_id=org_demo&from=2026-02-01T00:00:00.000Z&to=2026-03-01T00:00:00.000Z",
+        headers
+      });
+      expect(usageList.statusCode).toBe(row.expectCode.billingGet);
+
+      const billingList = await app.inject({
+        method: "GET",
+        url: "/api/billing?org_id=org_demo&from=2026-02-01T00:00:00.000Z&to=2026-03-01T00:00:00.000Z",
+        headers
+      });
+      expect(billingList.statusCode).toBe(row.expectCode.billingGet);
     }
   });
 
@@ -86,5 +101,64 @@ describe("control-plane RBAC matrix", () => {
         }
       }
     });
+  });
+
+  it("enforces API key scopes for protected /api routes", async () => {
+    const scopedStore = new InMemoryApiKeyStore();
+    const keysOnly = scopedStore.create({ provider: "router", label: "keys-only", scopes: ["keys:read"] }).plaintext;
+    const billingOnly = scopedStore.create({
+      provider: "router",
+      label: "billing-only",
+      scopes: ["billing:read"]
+    }).plaintext;
+    const policyOnly = scopedStore.create({
+      provider: "router",
+      label: "policy-only",
+      scopes: ["policies:write"]
+    }).plaintext;
+    const scopedApp = buildApp({ apiKeyStore: scopedStore });
+    await scopedApp.ready();
+
+    const keysAllowed = await scopedApp.inject({
+      method: "GET",
+      url: "/api/keys",
+      headers: { authorization: `Bearer ${keysOnly}`, "x-org-role": "owner" }
+    });
+    expect(keysAllowed.statusCode).toBe(200);
+
+    const keysDenied = await scopedApp.inject({
+      method: "GET",
+      url: "/api/keys",
+      headers: { authorization: `Bearer ${billingOnly}`, "x-org-role": "owner" }
+    });
+    expect(keysDenied.statusCode).toBe(403);
+    expect(keysDenied.json().error.details.required_scope).toBe("keys:read");
+
+    const policyDenied = await scopedApp.inject({
+      method: "POST",
+      url: "/api/policies",
+      headers: { authorization: `Bearer ${keysOnly}`, "x-org-role": "owner" },
+      payload: {
+        name: "scope-denied",
+        route: "/v1/chat/completions",
+        weights: [{ provider: "openai", value: 1 }]
+      }
+    });
+    expect(policyDenied.statusCode).toBe(403);
+    expect(policyDenied.json().error.details.required_scope).toBe("policies:write");
+
+    const policyAllowed = await scopedApp.inject({
+      method: "POST",
+      url: "/api/policies",
+      headers: { authorization: `Bearer ${policyOnly}`, "x-org-role": "owner" },
+      payload: {
+        name: "scope-allowed",
+        route: "/v1/chat/completions",
+        weights: [{ provider: "openai", value: 1 }]
+      }
+    });
+    expect(policyAllowed.statusCode).toBe(201);
+
+    await scopedApp.close();
   });
 });

@@ -24,6 +24,8 @@ export function requiredActionForRoute(method: string, path: string): Action | n
   if (method === "POST" && path === "/api/keys") return "write_keys";
   if (method === "GET" && path === "/api/policies") return "read_policies";
   if (method === "POST" && path === "/api/policies") return "write_policies";
+  if (method === "GET" && path === "/api/usage") return "read_billing";
+  if (method === "GET" && path === "/api/billing") return "read_billing";
   if (method === "GET" && path === "/api/orgs/:orgId/invoice") return "read_billing";
   return null;
 }
