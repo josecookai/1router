@@ -619,6 +619,92 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EmbeddingsError"
+  /api/infra/slo:
+    get:
+      summary: Get aggregated provider SLI snapshot for incident dashboard
+      operationId: getInfraSliSnapshot
+      parameters:
+        - in: query
+          name: window_minutes
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 1440
+        - in: query
+          name: service
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: env
+          required: false
+          schema:
+            type: string
+            enum: [dev, staging, prod]
+        - in: query
+          name: route_group
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: method
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: SLI snapshot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SliDashboardResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingsError"
+  /api/infra/traces:
+    get:
+      summary: List route decision traces for request debugging
+      operationId: listInfraTraces
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - in: query
+          name: route_group
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: provider
+          required: false
+          schema:
+            type: string
+        - in: query
+          name: redact
+          required: false
+          schema:
+            type: boolean
+      responses:
+        "200":
+          description: Trace list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TraceListResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EmbeddingsError"
   /api/webhooks/payments:
     post:
       summary: Receive payment/invoice provider webhook with idempotency
@@ -672,6 +758,73 @@ components:
       properties:
         request_id:
           type: string
+    SliAggregate:
+      type: object
+      additionalProperties: false
+      required: [window_minutes, request_count, success_rate, error_rate, p95_latency_ms]
+      properties:
+        window_minutes:
+          type: integer
+          minimum: 1
+        request_count:
+          type: integer
+          minimum: 0
+        success_rate:
+          type: number
+          minimum: 0
+          maximum: 1
+        error_rate:
+          type: number
+          minimum: 0
+          maximum: 1
+        p95_latency_ms:
+          type: integer
+          minimum: 0
+    SliDashboardResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          $ref: "#/components/schemas/SliAggregate"
+        meta:
+          $ref: "#/components/schemas/Meta"
+    TraceItem:
+      type: object
+      additionalProperties: false
+      required: [request_id, ts, route_group, provider, provider_model, model, status, latency_ms, prompt_preview]
+      properties:
+        request_id:
+          type: string
+        ts:
+          type: string
+          format: date-time
+        route_group:
+          type: string
+        provider:
+          type: string
+        provider_model:
+          type: string
+        model:
+          type: string
+        status:
+          type: integer
+        latency_ms:
+          type: integer
+          minimum: 0
+        prompt_preview:
+          type: string
+    TraceListResponse:
+      type: object
+      additionalProperties: false
+      required: [data, meta]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/TraceItem"
+        meta:
+          $ref: "#/components/schemas/Meta"
     Model:
       type: object
       additionalProperties: false

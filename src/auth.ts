@@ -5,6 +5,11 @@ export type RouterAuthContext = {
   key_prefix: string;
   org_id: string;
   project_id: string;
+  limits?: {
+    rpm?: number;
+    tpm?: number;
+    concurrency?: number;
+  };
 };
 
 export interface RouterApiKeyRepository {
