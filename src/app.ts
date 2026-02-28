@@ -110,7 +110,8 @@ export function buildApp(options: BuildAppOptions = {}) {
   const usageRepo = options.usageRepo ?? new FixtureUsageRepository();
   const responsesIdempotencyStore = options.responsesIdempotencyStore ?? new InMemoryIdempotencyStore<ResponsesResponse>();
   const paymentWebhookIdempotencyStore =
-    options.paymentWebhookIdempotencyStore ?? new InMemoryIdempotencyStore<PaymentWebhookAck>();
+    options.paymentWebhookIdempotencyStore ??
+    new InMemoryIdempotencyStore<PaymentWebhookAck>({ defaultTtlMs: 7 * 24 * 60 * 60 * 1000 });
   const sliMetricsStore = options.sliMetricsStore ?? new InMemorySliMetricsStore();
   const publicDir = path.resolve(process.cwd(), "public");
   (app as FastifyInstance & { sliMetricsStore?: InMemorySliMetricsStore }).sliMetricsStore = sliMetricsStore;
@@ -559,7 +560,16 @@ export function buildApp(options: BuildAppOptions = {}) {
         }
 
         reply.header("x-idempotent-replay", "true");
-        return existing.response;
+        return paymentWebhookAckSchema.parse({
+          ...existing.response,
+          data: {
+            ...existing.response.data,
+            replayed: true
+          },
+          meta: {
+            request_id: request.id
+          }
+        });
       }
 
       const response = paymentWebhookAckSchema.parse({
