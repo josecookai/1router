@@ -214,4 +214,52 @@ describe("POST /v1/responses", () => {
     expect(parsed.router.candidates[0]?.provider).toBe("anthropic");
     expect(parsed.router.region.excluded_candidates[0]?.reason).toBe("REGION_MISMATCH");
   });
+
+  it("retries transient upstream failure and succeeds within bounded attempts", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/responses",
+      payload: {
+        model: "openai/gpt-4.1-mini",
+        input: "hello [fail:openai:once:429]"
+      },
+      headers: { authorization: `Bearer ${plaintext}` }
+    });
+
+    expect(res.statusCode).toBe(200);
+    const parsed = responsesResponseSchema.parse(res.json());
+    expect(parsed.router.provider).toBe("openai");
+    expect(parsed.router.retry.max_attempts_per_candidate).toBe(2);
+    expect(parsed.router.retry.attempt_count).toBe(2);
+    expect(parsed.router.retry.failover_count).toBe(0);
+    expect(parsed.router.retry.stop_reason).toBe("success");
+    expect(parsed.router.retry.attempts[0]?.outcome).toBe("retryable_error");
+    expect(parsed.router.retry.attempts[1]?.outcome).toBe("success");
+  });
+
+  it("fails over to secondary candidate when primary exhausts retries", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/responses",
+      payload: {
+        model: "router/auto",
+        input: "hello [fail:anthropic:always:500]",
+        routing_preset: "success"
+      },
+      headers: { authorization: `Bearer ${plaintext}` }
+    });
+
+    expect(res.statusCode).toBe(200);
+    const parsed = responsesResponseSchema.parse(res.json());
+    expect(parsed.router.provider).toBe("openai");
+    expect(parsed.router.retry.failover_count).toBe(1);
+    expect(parsed.router.retry.attempt_count).toBe(3);
+    expect(parsed.router.retry.stop_reason).toBe("success");
+    expect(parsed.router.retry.attempts[0]?.provider).toBe("anthropic");
+    expect(parsed.router.retry.attempts[0]?.outcome).toBe("retryable_error");
+    expect(parsed.router.retry.attempts[1]?.provider).toBe("anthropic");
+    expect(parsed.router.retry.attempts[1]?.outcome).toBe("retryable_error");
+    expect(parsed.router.retry.attempts[2]?.provider).toBe("openai");
+    expect(parsed.router.retry.attempts[2]?.outcome).toBe("success");
+  });
 });

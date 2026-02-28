@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { buildDefaultProviderAdapterRegistry } from "./provider-adapters.js";
+import { buildDefaultProviderAdapterRegistry, type ChatCompletionProviderResult } from "./provider-adapters.js";
 import {
   getRoutingPresetWeights,
   selectRoutingCandidate,
@@ -65,6 +65,20 @@ export const responsesResponseSchema = z.object({
           reason: z.literal("REGION_MISMATCH")
         })
       )
+    }),
+    retry: z.object({
+      max_attempts_per_candidate: z.number().int().positive(),
+      attempt_count: z.number().int().positive(),
+      failover_count: z.number().int().nonnegative(),
+      stop_reason: z.enum(["success", "max_attempts_exhausted", "non_retryable_error"]),
+      attempts: z.array(
+        z.object({
+          provider: z.string(),
+          provider_model: z.string(),
+          attempt: z.number().int().positive(),
+          outcome: z.enum(["success", "retryable_error", "non_retryable_error"])
+        })
+      )
     })
   })
 });
@@ -120,6 +134,17 @@ export const routingExplainResponseSchema = z.object({
 export type RoutingExplainResponse = z.infer<typeof routingExplainResponseSchema>;
 
 const defaultRegistry = buildDefaultProviderAdapterRegistry();
+const MAX_ATTEMPTS_PER_CANDIDATE = 2;
+
+function isRetryableError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const statusCode = (error as Error & { statusCode?: number }).statusCode;
+  const code = (error as Error & { code?: string }).code;
+  if (code === "ETIMEDOUT") return true;
+  if (statusCode === 429) return true;
+  if (typeof statusCode === "number" && statusCode >= 500 && statusCode <= 599) return true;
+  return false;
+}
 
 function buildCandidatePool(model: string): RoutingCandidateMetrics[] {
   const modelProvider = model.split("/", 1)[0] ?? "";
@@ -177,19 +202,59 @@ export async function buildResponsesStubResponse(body: unknown, requestId: strin
   const candidatePool = buildCandidatePool(parsed.model);
 
   const decision = selectRoutingCandidate(candidatePool, preset, regionPreference);
-  const adapter = defaultRegistry.resolveChatAdapter(decision.selected_provider_model);
+  let completion: ChatCompletionProviderResult | null = null;
+  let failoverCount = 0;
+  const attempts: Array<{
+    provider: string;
+    provider_model: string;
+    attempt: number;
+    outcome: "success" | "retryable_error" | "non_retryable_error";
+  }> = [];
+  let stopReason: "success" | "max_attempts_exhausted" | "non_retryable_error" = "max_attempts_exhausted";
 
-  if (!adapter) {
-    throw new Error(`No responses adapter available for model: ${decision.selected_provider_model}`);
+  for (const candidate of decision.candidates) {
+    const adapter = defaultRegistry.resolveChatAdapter(candidate.provider_model);
+    if (!adapter) continue;
+
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS_PER_CANDIDATE; attempt += 1) {
+      try {
+        completion = await adapter.createChatCompletion({
+          model: candidate.provider_model,
+          messages: [{ role: "user", content: parsed.input }],
+          stream: false,
+          temperature: parsed.temperature,
+          max_tokens: parsed.max_output_tokens
+        });
+        attempts.push({
+          provider: candidate.provider,
+          provider_model: candidate.provider_model,
+          attempt,
+          outcome: "success"
+        });
+        stopReason = "success";
+        break;
+      } catch (error) {
+        const retryable = isRetryableError(error);
+        attempts.push({
+          provider: candidate.provider,
+          provider_model: candidate.provider_model,
+          attempt,
+          outcome: retryable ? "retryable_error" : "non_retryable_error"
+        });
+        if (!retryable) {
+          stopReason = "non_retryable_error";
+          break;
+        }
+      }
+    }
+
+    if (completion) break;
+    failoverCount += 1;
   }
 
-  const completion = await adapter.createChatCompletion({
-    model: decision.selected_provider_model,
-    messages: [{ role: "user", content: parsed.input }],
-    stream: false,
-    temperature: parsed.temperature,
-    max_tokens: parsed.max_output_tokens
-  });
+  if (!completion) {
+    throw new Error(`No responses adapter available for model: ${decision.selected_provider_model}`);
+  }
 
   return responsesResponseSchema.parse({
     id: `resp_${requestId.replace(/[^a-zA-Z0-9_-]/g, "")}`,
@@ -219,7 +284,14 @@ export async function buildResponsesStubResponse(body: unknown, requestId: strin
         score: candidate.score,
         rank: candidate.rank
       })),
-      region: decision.region
+      region: decision.region,
+      retry: {
+        max_attempts_per_candidate: MAX_ATTEMPTS_PER_CANDIDATE,
+        attempt_count: attempts.length,
+        failover_count: failoverCount,
+        stop_reason: stopReason,
+        attempts
+      }
     }
   });
 }
