@@ -246,6 +246,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/webhooks/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Receive payment/invoice provider webhook with idempotency */
+        post: operations["receivePaymentWebhook"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -514,6 +531,28 @@ export interface components {
         };
         OrgInvoiceResponse: {
             data: components["schemas"]["OrgInvoiceData"];
+            meta: components["schemas"]["Meta"];
+        };
+        PaymentWebhookRequest: {
+            provider: string;
+            /** @enum {string} */
+            event_type: "payment.succeeded" | "payment.failed" | "invoice.generated";
+            org_id: string;
+            invoice_id?: string;
+            payment_id?: string;
+            amount_cents?: number;
+            currency?: string;
+            /** Format: date-time */
+            occurred_at: string;
+        };
+        PaymentWebhookAck: {
+            data: {
+                event_id: string;
+                accepted: boolean;
+                replayed: boolean;
+                /** Format: date-time */
+                processed_at: string;
+            };
             meta: components["schemas"]["Meta"];
         };
         CreateApiKeyRequest: {
@@ -1536,6 +1575,62 @@ export interface operations {
             };
             /** @description Invalid request */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+        };
+    };
+    receivePaymentWebhook: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-provider-event-id": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "provider": "stripe",
+                 *       "event_type": "payment.succeeded",
+                 *       "org_id": "org_demo",
+                 *       "invoice_id": "inv_2026_02",
+                 *       "payment_id": "pay_123",
+                 *       "amount_cents": 275,
+                 *       "currency": "USD",
+                 *       "occurred_at": "2026-02-27T12:00:00.000Z"
+                 *     }
+                 */
+                "application/json": components["schemas"]["PaymentWebhookRequest"];
+            };
+        };
+        responses: {
+            /** @description Payment webhook accepted or replayed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentWebhookAck"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+            /** @description Event id conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
