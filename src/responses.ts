@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { buildDefaultProviderAdapterRegistry } from "./provider-adapters.js";
+import { type InMemoryProviderIncidentStore } from "./provider-incidents.js";
 import {
   getRoutingPresetWeights,
   selectRoutingCandidate,
@@ -65,6 +66,10 @@ export const responsesResponseSchema = z.object({
           reason: z.literal("REGION_MISMATCH")
         })
       )
+    }),
+    incidents: z.object({
+      excluded_providers: z.array(z.string()),
+      cooldown_checked_at: z.number().int().nonnegative()
     })
   })
 });
@@ -170,21 +175,36 @@ function buildCandidatePool(model: string): RoutingCandidateMetrics[] {
   ];
 }
 
-export async function buildResponsesStubResponse(body: unknown, requestId: string): Promise<ResponsesResponse> {
+export async function buildResponsesStubResponse(
+  body: unknown,
+  requestId: string,
+  options?: { incidentStore?: InMemoryProviderIncidentStore }
+): Promise<ResponsesResponse> {
   const parsed = responsesRequestSchema.parse(body);
   const preset: RoutingPreset = parsed.routing_preset ?? "balanced";
   const regionPreference: RoutingRegion | undefined = parsed.region_preference;
   const candidatePool = buildCandidatePool(parsed.model);
 
   const decision = selectRoutingCandidate(candidatePool, preset, regionPreference);
-  const adapter = defaultRegistry.resolveChatAdapter(decision.selected_provider_model);
+  const excludedProviders = decision.candidates
+    .map((candidate) => candidate.provider)
+    .filter((provider, index, list) => list.indexOf(provider) === index)
+    .filter((provider) => options?.incidentStore?.isDrained(provider) ?? false);
+  const availableCandidates = decision.candidates.filter((candidate) => !excludedProviders.includes(candidate.provider));
+  const selectedCandidate = availableCandidates[0] ?? decision.candidates[0];
+
+  if (!selectedCandidate) {
+    throw new Error("No responses candidates available");
+  }
+
+  const adapter = defaultRegistry.resolveChatAdapter(selectedCandidate.provider_model);
 
   if (!adapter) {
-    throw new Error(`No responses adapter available for model: ${decision.selected_provider_model}`);
+    throw new Error(`No responses adapter available for model: ${selectedCandidate.provider_model}`);
   }
 
   const completion = await adapter.createChatCompletion({
-    model: decision.selected_provider_model,
+    model: selectedCandidate.provider_model,
     messages: [{ role: "user", content: parsed.input }],
     stream: false,
     temperature: parsed.temperature,
@@ -219,7 +239,11 @@ export async function buildResponsesStubResponse(body: unknown, requestId: strin
         score: candidate.score,
         rank: candidate.rank
       })),
-      region: decision.region
+      region: decision.region,
+      incidents: {
+        excluded_providers: excludedProviders,
+        cooldown_checked_at: Date.now()
+      }
     }
   });
 }

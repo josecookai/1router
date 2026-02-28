@@ -415,6 +415,10 @@ export interface components {
                     reason: "REGION_MISMATCH";
                 }[];
             };
+            incidents: {
+                excluded_providers: string[];
+                cooldown_checked_at: number;
+            };
         };
         ResponsesResponse: {
             id: string;

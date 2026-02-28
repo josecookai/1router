@@ -18,6 +18,7 @@ import {
   updateProjectSchema
 } from "./org-projects.js";
 import { InMemoryPolicyStore, type PolicyRepository, createPolicySchema } from "./policies.js";
+import { InMemoryProviderIncidentStore } from "./provider-incidents.js";
 import {
   buildResponsesStubResponse,
   buildRoutingExplainResponse,
@@ -84,6 +85,7 @@ type BuildAppOptions = {
   orgProjectStore?: OrgProjectRepository;
   usageRepo?: FixtureUsageRepository;
   responsesIdempotencyStore?: InMemoryIdempotencyStore<ResponsesResponse>;
+  providerIncidentStore?: InMemoryProviderIncidentStore;
   paymentWebhookIdempotencyStore?: InMemoryIdempotencyStore<PaymentWebhookAck>;
   sliMetricsStore?: InMemorySliMetricsStore;
   registerRoutes?: (app: FastifyInstance) => void;
@@ -109,6 +111,9 @@ export function buildApp(options: BuildAppOptions = {}) {
   const orgProjectStore = options.orgProjectStore ?? new InMemoryOrgProjectStore();
   const usageRepo = options.usageRepo ?? new FixtureUsageRepository();
   const responsesIdempotencyStore = options.responsesIdempotencyStore ?? new InMemoryIdempotencyStore<ResponsesResponse>();
+  const providerIncidentStore =
+    options.providerIncidentStore ??
+    new InMemoryProviderIncidentStore({ threshold: 2, windowMs: 60_000, cooldownMs: 300_000 });
   const paymentWebhookIdempotencyStore =
     options.paymentWebhookIdempotencyStore ?? new InMemoryIdempotencyStore<PaymentWebhookAck>();
   const sliMetricsStore = options.sliMetricsStore ?? new InMemorySliMetricsStore();
@@ -267,7 +272,9 @@ export function buildApp(options: BuildAppOptions = {}) {
         }
       }
 
-      const response = await buildResponsesStubResponse(request.body, request.id);
+      const response = await buildResponsesStubResponse(request.body, request.id, {
+        incidentStore: providerIncidentStore
+      });
       if (idempotencyKey && fingerprint) {
         responsesIdempotencyStore.set({
           key: idempotencyKey,
