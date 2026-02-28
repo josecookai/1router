@@ -10,7 +10,7 @@ export const chatCompletionsRequestSchema = z
   .object({
     model: z.string().min(1),
     messages: z.array(chatMessageSchema).min(1),
-    stream: z.literal(false).optional(),
+    stream: z.boolean().optional(),
     temperature: z.number().min(0).max(2).optional(),
     top_p: z.number().min(0).max(1).optional(),
     max_tokens: z.number().int().positive().optional()
@@ -45,6 +45,17 @@ export const chatCompletionsResponseSchema = z.object({
 });
 
 export type ChatCompletionsResponse = z.infer<typeof chatCompletionsResponseSchema>;
+export type ChatCompletionStreamChunk = {
+  id: string;
+  object: "chat.completion.chunk";
+  created: number;
+  model: string;
+  choices: Array<{
+    index: number;
+    delta: { role?: "assistant"; content?: string };
+    finish_reason: "stop" | null;
+  }>;
+};
 
 const defaultRegistry = buildDefaultProviderAdapterRegistry();
 
@@ -81,4 +92,58 @@ export async function buildChatCompletionsStubResponse(body: unknown, requestId:
       request_id: requestId
     }
   });
+}
+
+export async function buildChatCompletionsStreamChunks(
+  body: unknown,
+  requestId: string,
+  options?: { signal?: AbortSignal }
+): Promise<{ chunks: ChatCompletionStreamChunk[]; done: boolean }> {
+  const parsed = chatCompletionsRequestSchema.parse(body);
+  const adapter = defaultRegistry.resolveChatAdapter(parsed.model);
+  if (!adapter) {
+    throw new Error(`No chat adapter available for model: ${parsed.model}`);
+  }
+
+  const result = await adapter.createChatCompletion(parsed);
+  const created = Math.floor(Date.now() / 1000);
+  const id = `chatcmpl_${requestId.replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const words = result.content.split(/\s+/).filter(Boolean);
+  const chunks: ChatCompletionStreamChunk[] = [];
+
+  chunks.push({
+    id,
+    object: "chat.completion.chunk",
+    created,
+    model: result.model,
+    choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }]
+  });
+
+  for (const word of words) {
+    if (options?.signal?.aborted) {
+      return { chunks, done: false };
+    }
+
+    chunks.push({
+      id,
+      object: "chat.completion.chunk",
+      created,
+      model: result.model,
+      choices: [{ index: 0, delta: { content: `${word} ` }, finish_reason: null }]
+    });
+  }
+
+  if (options?.signal?.aborted) {
+    return { chunks, done: false };
+  }
+
+  chunks.push({
+    id,
+    object: "chat.completion.chunk",
+    created,
+    model: result.model,
+    choices: [{ index: 0, delta: {}, finish_reason: "stop" }]
+  });
+
+  return { chunks, done: true };
 }
