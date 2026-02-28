@@ -246,6 +246,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/infra/slo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get aggregated provider SLI snapshot for incident dashboard */
+        get: operations["getInfraSliSnapshot"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/infra/traces": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List route decision traces for request debugging */
+        get: operations["listInfraTraces"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/webhooks/payments": {
         parameters: {
             query?: never;
@@ -269,6 +303,33 @@ export interface components {
     schemas: {
         Meta: {
             request_id: string;
+        };
+        SliAggregate: {
+            window_minutes: number;
+            request_count: number;
+            success_rate: number;
+            error_rate: number;
+            p95_latency_ms: number;
+        };
+        SliDashboardResponse: {
+            data: components["schemas"]["SliAggregate"];
+            meta: components["schemas"]["Meta"];
+        };
+        TraceItem: {
+            request_id: string;
+            /** Format: date-time */
+            ts: string;
+            route_group: string;
+            provider: string;
+            provider_model: string;
+            model: string;
+            status: number;
+            latency_ms: number;
+            prompt_preview: string;
+        };
+        TraceListResponse: {
+            data: components["schemas"]["TraceItem"][];
+            meta: components["schemas"]["Meta"];
         };
         Model: {
             id: string;
@@ -1571,6 +1632,75 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PolicyRecordResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+        };
+    };
+    getInfraSliSnapshot: {
+        parameters: {
+            query?: {
+                window_minutes?: number;
+                service?: string;
+                env?: "dev" | "staging" | "prod";
+                route_group?: string;
+                method?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description SLI snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SliDashboardResponse"];
+                };
+            };
+            /** @description Invalid request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmbeddingsError"];
+                };
+            };
+        };
+    };
+    listInfraTraces: {
+        parameters: {
+            query?: {
+                limit?: number;
+                route_group?: string;
+                provider?: string;
+                redact?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Trace list */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TraceListResponse"];
                 };
             };
             /** @description Invalid request */

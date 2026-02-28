@@ -23,6 +23,8 @@ import {
   buildRoutingExplainResponse,
   type ResponsesResponse
 } from "./responses.js";
+import { InMemoryMultiScopeRateLimiter } from "./rate-limits.js";
+import { InMemoryResponseTraceStore, traceListResponseSchema, traceQuerySchema } from "./response-traces.js";
 import { canRoleAccess, parseRole, requiredActionForRoute } from "./rbac.js";
 import {
   InMemorySliMetricsStore,
@@ -85,11 +87,14 @@ type BuildAppOptions = {
   usageRepo?: FixtureUsageRepository;
   responsesIdempotencyStore?: InMemoryIdempotencyStore<ResponsesResponse>;
   paymentWebhookIdempotencyStore?: InMemoryIdempotencyStore<PaymentWebhookAck>;
+  paymentWebhookIdempotencyTtlMs?: number;
   sliMetricsStore?: InMemorySliMetricsStore;
+  rateLimiter?: InMemoryMultiScopeRateLimiter;
   registerRoutes?: (app: FastifyInstance) => void;
 };
 
 export function buildApp(options: BuildAppOptions = {}) {
+  const paymentWebhookIdempotencyTtlMs = options.paymentWebhookIdempotencyTtlMs ?? 1000 * 60 * 60 * 24;
   const fastifyOptions: FastifyServerOptions = options.logger
     ? {
         logger: {
@@ -112,6 +117,8 @@ export function buildApp(options: BuildAppOptions = {}) {
   const paymentWebhookIdempotencyStore =
     options.paymentWebhookIdempotencyStore ?? new InMemoryIdempotencyStore<PaymentWebhookAck>();
   const sliMetricsStore = options.sliMetricsStore ?? new InMemorySliMetricsStore();
+  const rateLimiter = options.rateLimiter ?? new InMemoryMultiScopeRateLimiter();
+  const responseTraceStore = new InMemoryResponseTraceStore();
   const publicDir = path.resolve(process.cwd(), "public");
   (app as FastifyInstance & { sliMetricsStore?: InMemorySliMetricsStore }).sliMetricsStore = sliMetricsStore;
 
@@ -141,7 +148,7 @@ export function buildApp(options: BuildAppOptions = {}) {
     return buildModelsListResponse();
   });
 
-  app.addHook("onRequest", async (request, reply) => {
+  app.addHook("preHandler", async (request, reply) => {
     if (!request.url.startsWith("/v1/")) return;
 
     const context = authenticateRouterKey(request.headers.authorization, authRepo);
@@ -171,6 +178,40 @@ export function buildApp(options: BuildAppOptions = {}) {
         scope: action
       })
     );
+  });
+
+  app.addHook("preHandler", async (request, reply) => {
+    if (!request.url.startsWith("/v1/")) return;
+
+    const context = (request as { router_auth?: ReturnType<typeof authenticateRouterKey> }).router_auth;
+    if (!context) return;
+
+    const verdict = rateLimiter.checkAndReserve(context, request.body);
+    if (!verdict.allowed) {
+      reply.header("x-request-id", request.id);
+      reply.header("retry-after", String(verdict.retry_after_seconds));
+      reply.code(429);
+      return reply.send(
+        requestErrorEnvelope(request.id, "RATE_LIMITED", "Rate limit exceeded", {
+          gate: verdict.reason,
+          current: verdict.current,
+          limit: verdict.limit,
+          retry_after_seconds: verdict.retry_after_seconds,
+          scope: verdict.scope,
+          effective_limits: verdict.limits
+        })
+      );
+    }
+
+    (request as { rate_limit_release?: () => void }).rate_limit_release = verdict.release;
+  });
+
+  app.addHook("onResponse", async (request) => {
+    (request as { rate_limit_release?: () => void }).rate_limit_release?.();
+  });
+
+  app.addHook("onError", async (request) => {
+    (request as { rate_limit_release?: () => void }).rate_limit_release?.();
   });
 
   app.post("/v1/embeddings", async (request, reply) => {
@@ -623,6 +664,26 @@ export function buildApp(options: BuildAppOptions = {}) {
             path: []
           }
         ]);
+      }
+
+      throw error;
+    }
+  });
+
+  app.get("/api/infra/traces", async (request, reply) => {
+    reply.header("x-request-id", request.id);
+
+    try {
+      const query = traceQuerySchema.parse(request.query);
+      const traces = responseTraceStore.list(query);
+      return traceListResponseSchema.parse({
+        data: traces,
+        meta: { request_id: request.id }
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        reply.code(400);
+        return requestErrorEnvelope(request.id, "INVALID_REQUEST", "Invalid trace list query", error.issues);
       }
 
       throw error;
